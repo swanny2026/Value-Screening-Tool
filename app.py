@@ -1,27 +1,24 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import traceback
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 
-def add_cors_headers(response):
+@app.after_request
+def after_request(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
-@app.after_request
-def after_request(response):
-    return add_cors_headers(response)
-
-@app.route('/health', methods=['GET', 'OPTIONS'])
-def health():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+# ── Serve frontend ──────────────────────────────────────────────────────────
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
 
 # ── Index constituents ──────────────────────────────────────────────────────
 SP500_TICKERS = [
@@ -78,17 +75,13 @@ def score_dcf_margin(info):
         growth = max(min(float(growth), 0.20), -0.05)
         discount_rate = 0.10
         terminal_growth = 0.025
-        years = 10
         intrinsic = 0
-        for yr in range(1, years + 1):
-            projected_fcf = fcf * ((1 + growth) ** yr)
-            intrinsic += projected_fcf / ((1 + discount_rate) ** yr)
-        terminal_fcf = fcf * ((1 + growth) ** years) * (1 + terminal_growth)
-        terminal_value = terminal_fcf / (discount_rate - terminal_growth)
-        intrinsic += terminal_value / ((1 + discount_rate) ** years)
+        for yr in range(1, 11):
+            intrinsic += fcf * ((1 + growth) ** yr) / ((1 + discount_rate) ** yr)
+        terminal_fcf = fcf * ((1 + growth) ** 10) * (1 + terminal_growth)
+        intrinsic += (terminal_fcf / (discount_rate - terminal_growth)) / ((1 + discount_rate) ** 10)
         mos = ((intrinsic - market_cap) / market_cap) * 100
-        score = max(0, min(10, 5 + (mos / 6)))
-        return round(score, 1), round(mos, 1)
+        return round(max(0, min(10, 5 + (mos / 6))), 1), round(mos, 1)
     except Exception:
         return 5, 0
 
@@ -104,8 +97,7 @@ def score_business_quality(info):
         fcf = safe_get(info, "freeCashflow")
         mc = safe_get(info, "marketCap")
         if fcf and mc and mc > 0:
-            fcf_yield = (fcf / mc) * 100
-            scores.append(min(10, max(0, fcf_yield * 1.5)))
+            scores.append(min(10, max(0, (fcf / mc) * 100 * 1.5)))
         return round(np.mean(scores), 1) if scores else 5
     except Exception:
         return 5
@@ -130,10 +122,8 @@ def score_earnings_consistency(info):
         if eps_growth is not None:
             scores.append(min(10, max(0, 5 + float(eps_growth) * 20)))
         payout = safe_get(info, "payoutRatio")
-        if payout is not None and 0 < float(payout) < 0.8:
-            scores.append(8)
-        elif payout is not None:
-            scores.append(4)
+        if payout is not None:
+            scores.append(8 if 0 < float(payout) < 0.8 else 4)
         return round(np.mean(scores), 1) if scores else 5
     except Exception:
         return 5
@@ -143,8 +133,7 @@ def score_valuation_ratios(info, sector_pe_avg):
         scores = []
         pe = safe_get(info, "trailingPE")
         if pe is not None and sector_pe_avg:
-            ratio = float(pe) / sector_pe_avg
-            scores.append(min(10, max(0, 10 - (ratio - 0.5) * 10)))
+            scores.append(min(10, max(0, 10 - (float(pe) / sector_pe_avg - 0.5) * 10)))
         pb = safe_get(info, "priceToBook")
         if pb is not None:
             scores.append(min(10, max(0, 10 - float(pb) * 0.8)))
@@ -155,58 +144,30 @@ def score_valuation_ratios(info, sector_pe_avg):
     except Exception:
         return 5
 
-def compute_composite_score(dcf_score, quality_score, balance_score, earnings_score, val_score):
-    return round(
-        dcf_score      * 0.30 +
-        quality_score  * 0.25 +
-        balance_score  * 0.20 +
-        earnings_score * 0.15 +
-        val_score      * 0.10,
-        1
-    )
-
-def status_from_score(score, mos):
-    if score >= 7.0 and mos > 10:
-        return "value"
-    elif score >= 5.5:
-        return "watch"
-    else:
-        return "fair"
-
 def analyse_ticker(ticker, sector_pe_avgs):
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        info = yf.Ticker(ticker).info
         name = safe_get(info, "longName") or safe_get(info, "shortName") or ticker
         sector = get_sector(ticker)
-        index = get_index(ticker)
-        sector_pe = sector_pe_avgs.get(sector, 20)
         dcf_score, mos = score_dcf_margin(info)
-        quality_score   = score_business_quality(info)
-        balance_score   = score_balance_sheet(info)
-        earnings_score  = score_earnings_consistency(info)
-        val_score       = score_valuation_ratios(info, sector_pe)
-        composite = compute_composite_score(dcf_score, quality_score, balance_score, earnings_score, val_score)
-        score_100 = round(composite * 10)
-        status = status_from_score(composite, mos)
+        quality_score  = score_business_quality(info)
+        balance_score  = score_balance_sheet(info)
+        earnings_score = score_earnings_consistency(info)
+        val_score      = score_valuation_ratios(info, sector_pe_avgs.get(sector, 20))
+        composite = round(dcf_score*0.30 + quality_score*0.25 + balance_score*0.20 + earnings_score*0.15 + val_score*0.10, 1)
+        status = "value" if composite >= 7.0 and mos > 10 else "watch" if composite >= 5.5 else "fair"
         price = safe_get(info, "currentPrice") or safe_get(info, "regularMarketPrice", 0)
-        currency = safe_get(info, "currency", "USD")
         return {
-            "ticker": ticker,
-            "name": name,
-            "sector": sector,
-            "index": index,
+            "ticker": ticker, "name": name, "sector": sector,
+            "index": get_index(ticker),
             "price": round(float(price), 2) if price else 0,
-            "currency": currency,
-            "score": score_100,
-            "mos": round(mos, 1),
-            "status": status,
+            "currency": safe_get(info, "currency", "USD"),
+            "score": round(composite * 10),
+            "mos": round(mos, 1), "status": status,
             "pillars": {
-                "dcf":      round(dcf_score * 10),
-                "quality":  round(quality_score * 10),
-                "balance":  round(balance_score * 10),
-                "earnings": round(earnings_score * 10),
-                "valuation":round(val_score * 10),
+                "dcf": round(dcf_score*10), "quality": round(quality_score*10),
+                "balance": round(balance_score*10), "earnings": round(earnings_score*10),
+                "valuation": round(val_score*10)
             }
         }
     except Exception:
@@ -225,6 +186,10 @@ def compute_sector_pe_avgs(tickers):
             continue
     return {s: np.mean(v) for s, v in sector_pes.items()}
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+
 @app.route('/run-analysis', methods=['POST', 'OPTIONS'])
 def run_analysis():
     if request.method == 'OPTIONS':
@@ -232,20 +197,11 @@ def run_analysis():
     try:
         all_tickers = SP500_TICKERS + FTSE100_TICKERS
         sector_pe_avgs = compute_sector_pe_avgs(all_tickers)
-        results = []
-        for ticker in all_tickers:
-            result = analyse_ticker(ticker, sector_pe_avgs)
-            if result:
-                results.append(result)
+        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in all_tickers) if r]
         results.sort(key=lambda x: x["score"], reverse=True)
         for i, r in enumerate(results):
             r["rank"] = i + 1
-        return jsonify({
-            "success": True,
-            "timestamp": datetime.utcnow().isoformat(),
-            "count": len(results),
-            "results": results
-        })
+        return jsonify({"success": True, "timestamp": datetime.utcnow().isoformat(), "count": len(results), "results": results})
     except Exception as e:
         return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
@@ -254,21 +210,12 @@ def refresh_watchlist():
     if request.method == 'OPTIONS':
         return make_response('', 204)
     try:
-        data = request.get_json()
-        tickers = data.get("tickers", [])
+        tickers = request.get_json().get("tickers", [])
         if not tickers:
             return jsonify({"success": False, "error": "No tickers provided"}), 400
         sector_pe_avgs = compute_sector_pe_avgs(tickers)
-        results = []
-        for ticker in tickers:
-            result = analyse_ticker(ticker, sector_pe_avgs)
-            if result:
-                results.append(result)
-        return jsonify({
-            "success": True,
-            "timestamp": datetime.utcnow().isoformat(),
-            "results": results
-        })
+        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in tickers) if r]
+        return jsonify({"success": True, "timestamp": datetime.utcnow().isoformat(), "results": results})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
