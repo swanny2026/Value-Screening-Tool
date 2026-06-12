@@ -1,12 +1,14 @@
 from flask import Flask, jsonify, request, make_response, send_from_directory
-import yfinance as yf
-import pandas as pd
+import requests as req
 import numpy as np
 from datetime import datetime
 import traceback
 import os
 
 app = Flask(__name__, static_folder='static')
+
+API_KEY = os.environ.get('FMP_API_KEY', '')
+FMP_BASE = 'https://financialmodelingprep.com/api/v3'
 
 @app.after_request
 def after_request(response):
@@ -15,7 +17,6 @@ def after_request(response):
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
-# ── Serve frontend ──────────────────────────────────────────────────────────
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
@@ -32,17 +33,11 @@ FTSE100_TICKERS = [
 ]
 
 SECTOR_MAP = {
-    "Technology": ["AAPL","MSFT","AVGO","TXN","QCOM","ORCL","IBM","INTU","ACN"],
-    "Healthcare": ["JNJ","UNH","MRK","ABBV","PFE","TMO","DHR","ABT","AMGN","BMY","GILD","AZN.L","GSK.L"],
-    "Financials": ["BRK-B","JPM","V","MA","BAC","MS","GS","BLK","AXP","HSBA.L","LLOY.L","BARC.L","NWG.L","STAN.L","PRU.L","LSEG.L"],
-    "Consumer Staples": ["PG","PEP","KO","WMT","COST","MCD","SBUX","MDLZ","PM","ULVR.L","BATS.L","DGE.L","IMB.L","TSCO.L","CPG.L"],
+    "Technology": ["AAPL","MSFT","INTU","DHR","TMO"],
+    "Healthcare": ["JNJ","MRK","ABBV","AMGN","ABT","AZN.L","GSK.L"],
+    "Financials": ["JPM","BAC","HSBA.L","LLOY.L","BARC.L","NWG.L"],
+    "Consumer Staples": ["PG","PEP","KO","WMT","MCD","NKE","ULVR.L","DGE.L"],
     "Energy": ["CVX","SHEL.L","BP.L"],
-    "Industrials": ["HD","UPS","RTX","HON","GE","CAT","RIO.L","NG.L"],
-    "Consumer Discretionary": ["AMZN","NKE","REL.L","WPP.L","BT-A.L"],
-    "Real Estate": ["SGRO.L"],
-    "Materials": ["LIN","ANTO.L","MNDI.L","SKG.L"],
-    "Communications": ["GOOGL","VOD.L"],
-    "Utilities": ["NEE","INF.L"],
 }
 
 def get_sector(ticker):
@@ -54,115 +49,116 @@ def get_sector(ticker):
 def get_index(ticker):
     return "FTSE 100" if ticker.endswith(".L") else "S&P 500"
 
-def safe_get(info, key, default=None):
-    val = info.get(key, default)
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return default
-    return val
+def fmp_get(endpoint, params={}):
+    params['apikey'] = API_KEY
+    r = req.get(f"{FMP_BASE}/{endpoint}", params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
-def score_dcf_margin(info):
+def safe(val, default=None):
+    if val is None or val == 0:
+        return default
     try:
-        fcf = safe_get(info, "freeCashflow")
-        market_cap = safe_get(info, "marketCap")
-        growth = safe_get(info, "earningsGrowth", 0.05)
-        if not fcf or not market_cap or fcf <= 0:
+        f = float(val)
+        return default if np.isnan(f) else f
+    except Exception:
+        return default
+
+def score_dcf(profile, ratios):
+    try:
+        fcf = safe(profile.get('freeCashFlowPerShare', 0))
+        price = safe(profile.get('price', 0))
+        shares = safe(profile.get('sharesOutstanding', 0))
+        if not fcf or not price or not shares or fcf <= 0:
             return 5, 0
-        growth = max(min(float(growth), 0.20), -0.05)
+        total_fcf = fcf * shares
+        market_cap = price * shares
+        growth = min(max(safe(ratios.get('revenueGrowth', 0.05), 0.05), -0.05), 0.20)
         discount_rate = 0.10
         terminal_growth = 0.025
         intrinsic = 0
         for yr in range(1, 11):
-            intrinsic += fcf * ((1 + growth) ** yr) / ((1 + discount_rate) ** yr)
-        terminal_fcf = fcf * ((1 + growth) ** 10) * (1 + terminal_growth)
+            intrinsic += total_fcf * ((1 + growth) ** yr) / ((1 + discount_rate) ** yr)
+        terminal_fcf = total_fcf * ((1 + growth) ** 10) * (1 + terminal_growth)
         intrinsic += (terminal_fcf / (discount_rate - terminal_growth)) / ((1 + discount_rate) ** 10)
         mos = ((intrinsic - market_cap) / market_cap) * 100
         return round(max(0, min(10, 5 + (mos / 6))), 1), round(mos, 1)
     except Exception:
         return 5, 0
 
-def score_business_quality(info):
-    try:
-        scores = []
-        roe = safe_get(info, "returnOnEquity")
-        if roe is not None:
-            scores.append(min(10, max(0, float(roe) * 50)))
-        margin = safe_get(info, "profitMargins")
-        if margin is not None:
-            scores.append(min(10, max(0, float(margin) * 40)))
-        fcf = safe_get(info, "freeCashflow")
-        mc = safe_get(info, "marketCap")
-        if fcf and mc and mc > 0:
-            scores.append(min(10, max(0, (fcf / mc) * 100 * 1.5)))
-        return round(np.mean(scores), 1) if scores else 5
-    except Exception:
-        return 5
+def score_quality(ratios):
+    scores = []
+    roe = safe(ratios.get('returnOnEquityTTM'))
+    if roe: scores.append(min(10, max(0, roe * 50)))
+    margin = safe(ratios.get('netProfitMarginTTM'))
+    if margin: scores.append(min(10, max(0, margin * 40)))
+    fcf_yield = safe(ratios.get('freeCashFlowYieldTTM'))
+    if fcf_yield: scores.append(min(10, max(0, fcf_yield * 150)))
+    return round(np.mean(scores), 1) if scores else 5
 
-def score_balance_sheet(info):
-    try:
-        scores = []
-        de = safe_get(info, "debtToEquity")
-        if de is not None:
-            scores.append(min(10, max(0, 10 - (float(de) / 20))))
-        current = safe_get(info, "currentRatio")
-        if current is not None:
-            scores.append(min(10, max(0, float(current) * 4)))
-        return round(np.mean(scores), 1) if scores else 5
-    except Exception:
-        return 5
+def score_balance(ratios):
+    scores = []
+    de = safe(ratios.get('debtEquityRatioTTM'))
+    if de: scores.append(min(10, max(0, 10 - (de / 20))))
+    current = safe(ratios.get('currentRatioTTM'))
+    if current: scores.append(min(10, max(0, current * 4)))
+    return round(np.mean(scores), 1) if scores else 5
 
-def score_earnings_consistency(info):
-    try:
-        scores = []
-        eps_growth = safe_get(info, "earningsGrowth")
-        if eps_growth is not None:
-            scores.append(min(10, max(0, 5 + float(eps_growth) * 20)))
-        payout = safe_get(info, "payoutRatio")
-        if payout is not None:
-            scores.append(8 if 0 < float(payout) < 0.8 else 4)
-        return round(np.mean(scores), 1) if scores else 5
-    except Exception:
-        return 5
+def score_earnings(ratios):
+    scores = []
+    eps_growth = safe(ratios.get('epsgrowthTTM') or ratios.get('epsGrowth'))
+    if eps_growth: scores.append(min(10, max(0, 5 + eps_growth * 20)))
+    payout = safe(ratios.get('payoutRatioTTM'))
+    if payout: scores.append(8 if 0 < payout < 0.8 else 4)
+    return round(np.mean(scores), 1) if scores else 5
 
-def score_valuation_ratios(info, sector_pe_avg):
-    try:
-        scores = []
-        pe = safe_get(info, "trailingPE")
-        if pe is not None and sector_pe_avg:
-            scores.append(min(10, max(0, 10 - (float(pe) / sector_pe_avg - 0.5) * 10)))
-        pb = safe_get(info, "priceToBook")
-        if pb is not None:
-            scores.append(min(10, max(0, 10 - float(pb) * 0.8)))
-        ev_ebitda = safe_get(info, "enterpriseToEbitda")
-        if ev_ebitda is not None:
-            scores.append(min(10, max(0, 10 - float(ev_ebitda) * 0.4)))
-        return round(np.mean(scores), 1) if scores else 5
-    except Exception:
-        return 5
+def score_valuation(ratios, sector_pe_avg):
+    scores = []
+    pe = safe(ratios.get('peRatioTTM'))
+    if pe and sector_pe_avg:
+        scores.append(min(10, max(0, 10 - (pe / sector_pe_avg - 0.5) * 10)))
+    pb = safe(ratios.get('priceToBookRatioTTM'))
+    if pb: scores.append(min(10, max(0, 10 - pb * 0.8)))
+    ev_ebitda = safe(ratios.get('enterpriseValueMultipleTTM'))
+    if ev_ebitda: scores.append(min(10, max(0, 10 - ev_ebitda * 0.4)))
+    return round(np.mean(scores), 1) if scores else 5
 
 def analyse_ticker(ticker, sector_pe_avgs):
     try:
-        info = yf.Ticker(ticker).info
-        name = safe_get(info, "longName") or safe_get(info, "shortName") or ticker
-        sector = get_sector(ticker)
-        dcf_score, mos = score_dcf_margin(info)
-        quality_score  = score_business_quality(info)
-        balance_score  = score_balance_sheet(info)
-        earnings_score = score_earnings_consistency(info)
-        val_score      = score_valuation_ratios(info, sector_pe_avgs.get(sector, 20))
-        composite = round(dcf_score*0.30 + quality_score*0.25 + balance_score*0.20 + earnings_score*0.15 + val_score*0.10, 1)
+        fmp_ticker = ticker.replace('.L', '')
+        profile_data = fmp_get(f'profile/{fmp_ticker}')
+        ratios_data  = fmp_get(f'ratios-ttm/{fmp_ticker}')
+        if not profile_data:
+            return None
+        profile = profile_data[0]
+        ratios  = ratios_data[0] if ratios_data else {}
+        sector  = get_sector(ticker)
+        dcf_score, mos = score_dcf(profile, ratios)
+        quality_score  = score_quality(ratios)
+        balance_score  = score_balance(ratios)
+        earnings_score = score_earnings(ratios)
+        val_score      = score_valuation(ratios, sector_pe_avgs.get(sector, 20))
+        composite = round(
+            dcf_score*0.30 + quality_score*0.25 +
+            balance_score*0.20 + earnings_score*0.15 + val_score*0.10, 1
+        )
         status = "value" if composite >= 7.0 and mos > 10 else "watch" if composite >= 5.5 else "fair"
-        price = safe_get(info, "currentPrice") or safe_get(info, "regularMarketPrice", 0)
         return {
-            "ticker": ticker, "name": name, "sector": sector,
+            "ticker": ticker,
+            "name": profile.get("companyName", ticker),
+            "sector": sector,
             "index": get_index(ticker),
-            "price": round(float(price), 2) if price else 0,
-            "currency": safe_get(info, "currency", "USD"),
+            "price": round(float(profile.get("price", 0)), 2),
+            "currency": "GBP" if ticker.endswith(".L") else "USD",
             "score": round(composite * 10),
-            "mos": round(mos, 1), "status": status,
+            "mos": round(mos, 1),
+            "status": status,
             "pillars": {
-                "dcf": round(dcf_score*10), "quality": round(quality_score*10),
-                "balance": round(balance_score*10), "earnings": round(earnings_score*10),
-                "valuation": round(val_score*10)
+                "dcf":      round(dcf_score * 10),
+                "quality":  round(quality_score * 10),
+                "balance":  round(balance_score * 10),
+                "earnings": round(earnings_score * 10),
+                "valuation":round(val_score * 10),
             }
         }
     except Exception:
@@ -170,33 +166,30 @@ def analyse_ticker(ticker, sector_pe_avgs):
 
 def compute_sector_pe_avgs(tickers):
     sector_pes = {}
-    for ticker in tickers[:20]:
+    for ticker in tickers[:10]:
         try:
-            info = yf.Ticker(ticker).info
-            pe = safe_get(info, "trailingPE")
-            sector = get_sector(ticker)
-            if pe and 0 < float(pe) < 200:
-                sector_pes.setdefault(sector, []).append(float(pe))
+            fmp_ticker = ticker.replace('.L', '')
+            ratios = fmp_get(f'ratios-ttm/{fmp_ticker}')
+            if ratios:
+                pe = safe(ratios[0].get('peRatioTTM'))
+                sector = get_sector(ticker)
+                if pe and 0 < pe < 200:
+                    sector_pes.setdefault(sector, []).append(pe)
         except Exception:
             continue
     return {s: np.mean(v) for s, v in sector_pes.items()}
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+
 @app.route('/test', methods=['GET'])
 def test():
     try:
-        ticker = yf.Ticker("AAPL")
-        info = ticker.info
-        return jsonify({
-            "success": True,
-            "name": info.get("longName"),
-            "price": info.get("currentPrice"),
-            "pe": info.get("trailingPE")
-        })
+        data = fmp_get('profile/AAPL')
+        return jsonify({"success": True, "name": data[0].get('companyName'), "price": data[0].get('price')})
     except Exception as e:
         return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()})
-
-
-    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
 
 @app.route('/run-analysis', methods=['POST', 'OPTIONS'])
 def run_analysis():
