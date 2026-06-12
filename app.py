@@ -22,18 +22,13 @@ def index():
 
 # ── Index constituents ──────────────────────────────────────────────────────
 SP500_TICKERS = [
-    "AAPL","MSFT","GOOGL","AMZN","BRK-B","JNJ","JPM","V","PG","MA",
-    "UNH","HD","CVX","MRK","ABBV","PEP","KO","BAC","PFE","AVGO",
-    "TMO","COST","MCD","ACN","ABT","DHR","WMT","LIN","NKE","TXN",
-    "PM","NEE","UPS","MS","RTX","ORCL","QCOM","HON","AMGN","BMY",
-    "SBUX","IBM","GE","CAT","GS","BLK","MDLZ","AXP","GILD","INTU"
+    "AAPL","MSFT","GOOGL","JNJ","JPM","PG","KO","WMT","BAC","CVX",
+    "MRK","ABBV","PEP","NKE","MCD","AMGN","TMO","ABT","DHR","INTU"
 ]
 
 FTSE100_TICKERS = [
-    "SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","RIO.L","GSK.L","DGE.L",
-    "BATS.L","LSEG.L","NG.L","LLOY.L","VOD.L","REL.L","EXPN.L","CPG.L",
-    "BARC.L","NWG.L","PRU.L","STAN.L","IMB.L","WPP.L","TSCO.L","SGRO.L",
-    "BT-A.L","INF.L","MNDI.L","RKT.L","SKG.L","ANTO.L"
+    "SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","GSK.L","DGE.L",
+    "LLOY.L","BARC.L","NWG.L"
 ]
 
 SECTOR_MAP = {
