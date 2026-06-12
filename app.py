@@ -25,9 +25,7 @@ def index():
 SP500_TICKERS = [
     "AAPL","MSFT","GOOGL","JNJ","JPM","PG","KO","WMT","BAC","CVX",
     "MRK","ABBV","PEP","NKE","MCD","AMGN","TMO","ABT","DHR","INTU",
-    "V","MA","UNH","HD","AVGO","TXN","QCOM","ORCL","HON","COST",
-    "LIN","NEE","RTX","BMY","GILD","SBUX","IBM","GE","CAT","GS",
-    "BLK","MDLZ","AXP","MS","UPS","AMZN","META","NVDA","TSLA","AMD"
+    "V","MA","UNH","HD","AVGO","TXN","QCOM","ORCL","HON","COST"
 ]
 
 SECTOR_MAP = {
