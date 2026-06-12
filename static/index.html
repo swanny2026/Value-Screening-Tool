@@ -1,344 +1,938 @@
-from flask import Flask, jsonify, request, make_response, send_from_directory
-import requests as req
-import numpy as np
-from datetime import datetime
-import traceback
-import os
-import threading
-import time
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Margin — Value Stock Screener</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-app = Flask(__name__, static_folder='static')
+    :root {
+      --ink:        #F0F4FF;
+      --ink-mid:    #B8C4D8;
+      --ink-muted:  #6B7A99;
+      --rule:       #1E2D4A;
+      --surface:    #0D1828;
+      --white:      #112240;
+      --gold:       #C9A84C;
+      --gold-light: #1E1A08;
+      --green:      #4ECDC4;
+      --green-bg:   #0D2A28;
+      --amber:      #F4A261;
+      --amber-bg:   #2A1A08;
+      --red:        #E07070;
+      --red-bg:     #3A1A1A;
+    }
 
-API_KEY = os.environ.get('FINNHUB_API_KEY', '')
-FH_BASE = 'https://finnhub.io/api/v1'
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0D1828;
+      color: var(--ink);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
 
-# ── Cache ────────────────────────────────────────────────────────────────────
-cache = {
-    "results":   [],
-    "timestamp": None,
-    "count":     0,
-    "refreshing": False,
-}
-CACHE_TTL_HOURS = 24
+    /* ── Header ── */
+    header {
+      background: #060E1A;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
 
-@app.after_request
-def after_request(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+    .logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--white);
+      letter-spacing: -0.3px;
+    }
 
-@app.route('/')
-def index():
-    return send_from_directory('static', 'index.html')
+    .logo span {
+      color: var(--gold);
+      font-style: italic;
+    }
 
-# ── S&P 500 tickers ─────────────────────────────────────────────────────────
-SP500_TICKERS = [
-    "AAPL","MSFT","GOOGL","JNJ","JPM","PG","KO","WMT","BAC","CVX",
-    "MRK","ABBV","PEP","NKE","MCD","AMGN","TMO","ABT","DHR","INTU",
-    "V","MA","UNH","HD","AVGO","TXN","QCOM","ORCL","HON","COST"
-]
+    .tagline {
+      font-size: 11px;
+      color: var(--ink-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
 
-SECTOR_MAP = {
-    "Technology":            ["AAPL","MSFT","GOOGL","AVGO","TXN","QCOM","ORCL","INTU","IBM","AMD","NVDA"],
-    "Healthcare":            ["JNJ","MRK","ABBV","AMGN","TMO","ABT","DHR","UNH","BMY","GILD"],
-    "Financials":            ["JPM","BAC","V","MA","GS","MS","BLK","AXP"],
-    "Consumer Staples":      ["PG","KO","PEP","WMT","MCD","SBUX","MDLZ","COST"],
-    "Consumer Discretionary":["NKE","HD","AMZN","TSLA"],
-    "Energy":                ["CVX"],
-    "Industrials":           ["HON","GE","CAT","RTX","UPS","LIN"],
-    "Utilities":             ["NEE"],
-}
+    /* ── Nav tabs ── */
+    nav {
+      background: #0D1E38;
+      border-bottom: 1px solid var(--rule);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
 
-def get_sector(ticker):
-    for sector, tickers in SECTOR_MAP.items():
-        if ticker in tickers:
-            return sector
-    return "Other"
+    .nav-tab {
+      padding: 14px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
 
-def safe(val, default=0):
-    if val is None or val == "None" or val == "-":
-        return default
-    try:
-        f = float(val)
-        return default if (np.isnan(f) or np.isinf(f)) else f
-    except Exception:
-        return default
+    .nav-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--gold);
+    }
 
-def fh_get(endpoint, params={}):
-    params['token'] = API_KEY
-    r = req.get(f"{FH_BASE}/{endpoint}", params=params, timeout=15)
-    r.raise_for_status()
-    return r.json()
+    .nav-tab:hover:not(.active) {
+      color: var(--ink-mid);
+    }
 
-def get_quote(ticker):
-    return fh_get('quote', {'symbol': ticker})
+    .watchlist-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gold);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-left: 6px;
+    }
 
-def get_profile(ticker):
-    return fh_get('stock/profile2', {'symbol': ticker})
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
 
-def get_financials(ticker):
-    return fh_get('stock/metric', {'symbol': ticker, 'metric': 'all'})
+    /* ── Panel header ── */
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
 
-# ── Scoring ─────────────────────────────────────────────────────────────────
+    .panel-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: var(--ink);
+      line-height: 1.2;
+    }
 
-def score_dcf(metrics, price):
-    try:
-        # Use free cash flow per share approach
-        fcf_per_share = safe(metrics.get('freeCashFlowPerShareTTM'))
-        if not fcf_per_share or fcf_per_share <= 0 or not price:
-            return 5, 0
+    .panel-sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: 4px;
+    }
 
-        # Conservative growth assumptions
-        growth_3y   = safe(metrics.get('epsGrowth3Y'), 0.05)
-        growth_rate = min(max(growth_3y, -0.02), 0.15)  # cap between -2% and 15%
-        discount    = 0.10
-        terminal_g  = 0.025
-        years       = 10
+    /* ── Run button ── */
+    .btn-run {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--gold);
+      color: #0D160D;
+      border: none;
+      padding: 11px 22px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
 
-        # Project and discount FCF per share
-        intrinsic = 0
-        for yr in range(1, years + 1):
-            intrinsic += fcf_per_share * ((1 + growth_rate) ** yr) / ((1 + discount) ** yr)
+    .btn-run:hover { background: #D9A84C; }
+    .btn-run:active { transform: scale(0.98); }
 
-        # Terminal value
-        terminal_fcf = fcf_per_share * ((1 + growth_rate) ** years) * (1 + terminal_g)
-        intrinsic += (terminal_fcf / (discount - terminal_g)) / ((1 + discount) ** years)
+    .btn-run .icon {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(13,24,40,0.4);
+      border-top-color: #060E1A;
+      border-radius: 50%;
+      animation: none;
+    }
 
-        # Margin of safety: how much cheaper is the stock vs intrinsic value
-        mos = ((intrinsic - price) / price) * 100
+    .btn-run.running .icon {
+      animation: spin 0.7s linear infinite;
+    }
 
-        # Cap MoS display at ±100% to avoid wild numbers
-        mos = max(min(mos, 100), -100)
-        score = max(0, min(10, 5 + (mos / 20)))
-        return round(score, 1), round(mos, 1)
-    except Exception:
-        return 5, 0
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
-def score_quality(metrics):
-    scores = []
-    roe = safe(metrics.get('roeTTM'))
-    if roe: scores.append(min(10, max(0, roe * 50)))
-    margin = safe(metrics.get('netProfitMarginTTM'))
-    if margin: scores.append(min(10, max(0, margin * 40)))
-    roa = safe(metrics.get('roaTTM'))
-    if roa: scores.append(min(10, max(0, roa * 100)))
-    return round(np.mean(scores), 1) if scores else 5
+    /* ── Progress bar ── */
+    .progress-wrap {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: none;
+    }
 
-def score_balance(metrics):
-    scores = []
-    de = safe(metrics.get('totalDebt/totalEquityAnnual'))
-    if de: scores.append(min(10, max(0, 10 - (de / 20))))
-    current = safe(metrics.get('currentRatioAnnual'))
-    if current: scores.append(min(10, max(0, current * 4)))
-    return round(np.mean(scores), 1) if scores else 5
+    .progress-wrap.visible { display: block; }
 
-def score_earnings(metrics):
-    scores = []
-    eg = safe(metrics.get('epsGrowth3Y'))
-    if eg: scores.append(min(10, max(0, 5 + eg * 20)))
-    eg_ttm = safe(metrics.get('revenueGrowthTTMYoy'))
-    if eg_ttm: scores.append(min(10, max(0, 5 + eg_ttm * 15)))
-    return round(np.mean(scores), 1) if scores else 5
+    .progress-label {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-bottom: 10px;
+      font-family: 'JetBrains Mono', monospace;
+    }
 
-def score_valuation(metrics, sector_pe_avg):
-    scores = []
-    pe = safe(metrics.get('peBasicExclExtraTTM'))
-    if pe and sector_pe_avg and pe > 0:
-        scores.append(min(10, max(0, 10 - (pe / sector_pe_avg - 0.5) * 10)))
-    pb = safe(metrics.get('pbAnnual'))
-    if pb: scores.append(min(10, max(0, 10 - pb * 0.8)))
-    ev_ebitda = safe(metrics.get('currentEv/freeCashFlowAnnual'))
-    if ev_ebitda: scores.append(min(10, max(0, 10 - ev_ebitda * 0.4)))
-    return round(np.mean(scores), 1) if scores else 5
+    .progress-bar-bg {
+      background: var(--rule);
+      border-radius: 3px;
+      height: 4px;
+      overflow: hidden;
+    }
 
-def analyse_ticker(ticker, sector_pe_avgs):
-    try:
-        profile  = get_profile(ticker)
-        fin_data = get_financials(ticker)
-        quote    = get_quote(ticker)
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
 
-        if not profile or not profile.get('name'):
-            return None
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-        metrics = fin_data.get('metric', {})
-        price   = safe(quote.get('c'))
-        sector  = get_sector(ticker)
+    .filter-label {
+      font-size: 12px;
+      color: var(--ink-muted);
+      font-weight: 500;
+    }
 
-        dcf_score, mos  = score_dcf(metrics, price)
-        quality_score   = score_quality(metrics)
-        balance_score   = score_balance(metrics)
-        earnings_score  = score_earnings(metrics)
-        val_score       = score_valuation(metrics, sector_pe_avgs.get(sector, 20))
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--rule);
+      background: #112240;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      color: var(--ink-mid);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
 
-        composite = round(
-            dcf_score*0.30 + quality_score*0.25 +
-            balance_score*0.20 + earnings_score*0.15 + val_score*0.10, 1
-        )
-        status = "value" if composite >= 7.0 and mos > 10 else "watch" if composite >= 5.5 else "fair"
+    .filter-btn.active {
+      background: var(--gold);
+      color: #0D160D;
+      border-color: var(--gold);
+    }
 
-        return {
-            "ticker":   ticker,
-            "name":     profile.get('name', ticker),
-            "sector":   sector,
-            "index":    "S&P 500",
-            "price":    round(price, 2),
-            "currency": "USD",
-            "score":    round(composite * 10),
-            "mos":      round(mos, 1),
-            "status":   status,
-            "pillars": {
-                "dcf":       round(dcf_score * 10),
-                "quality":   round(quality_score * 10),
-                "balance":   round(balance_score * 10),
-                "earnings":  round(earnings_score * 10),
-                "valuation": round(val_score * 10),
-            }
-        }
-    except Exception as e:
-        print(f"Error analysing {ticker}: {e}")
-        return None
+    .filter-btn:hover:not(.active) {
+      border-color: var(--gold);
+      color: var(--ink);
+    }
 
-def compute_sector_pe_avgs(tickers):
-    sector_pes = {}
-    for ticker in tickers[:15]:
-        try:
-            fin_data = get_financials(ticker)
-            metrics  = fin_data.get('metric', {})
-            pe       = safe(metrics.get('peBasicExclExtraTTM'))
-            sector   = get_sector(ticker)
-            if pe and 0 < pe < 200:
-                sector_pes.setdefault(sector, []).append(pe)
-        except Exception:
-            continue
-    return {s: np.mean(v) for s, v in sector_pes.items()}
+    /* ── Results table ── */
+    .results-card {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+    }
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-def run_full_analysis():
-    """Runs the full analysis and stores results in cache."""
-    if cache["refreshing"]:
-        return
-    cache["refreshing"] = True
-    print(f"[{datetime.utcnow().isoformat()}] Starting analysis...")
-    try:
-        sector_pe_avgs = compute_sector_pe_avgs(SP500_TICKERS)
-        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in SP500_TICKERS) if r]
-        results.sort(key=lambda x: x["score"], reverse=True)
-        for i, r in enumerate(results):
-            r["rank"] = i + 1
-        cache["results"]   = results
-        cache["timestamp"] = datetime.utcnow().isoformat()
-        cache["count"]     = len(results)
-        print(f"[{datetime.utcnow().isoformat()}] Analysis complete — {len(results)} companies scored.")
-    except Exception as e:
-        print(f"Analysis error: {e}")
-    finally:
-        cache["refreshing"] = False
+    .results-table thead tr {
+      border-bottom: 1px solid var(--rule);
+    }
 
-def background_scheduler():
-    """Runs analysis once on startup, then every 24 hours."""
-    time.sleep(5)  # brief delay to let server start
-    while True:
-        run_full_analysis()
-        time.sleep(CACHE_TTL_HOURS * 3600)
+    .results-table th {
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
 
-# Start background thread
-scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
-scheduler_thread.start()
+    .results-table th.right { text-align: right; }
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+    .results-table tbody tr {
+      border-bottom: 1px solid var(--rule);
+      transition: background 0.1s;
+      cursor: pointer;
+    }
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({
-        "status":     "ok",
-        "timestamp":  datetime.utcnow().isoformat(),
-        "cached":     cache["timestamp"],
-        "count":      cache["count"],
-        "refreshing": cache["refreshing"],
-    })
+    .results-table tbody tr:last-child { border-bottom: none; }
+    .results-table tbody tr:hover { background: #162B4A; }
 
-@app.route('/test', methods=['GET'])
-def test():
-    try:
-        profile  = get_profile('AAPL')
-        quote    = get_quote('AAPL')
-        fin_data = get_financials('AAPL')
-        metrics  = fin_data.get('metric', {})
-        return jsonify({
-            "success": True,
-            "name":    profile.get('name'),
-            "price":   quote.get('c'),
-            "pe":      metrics.get('peBasicExclExtraTTM'),
-            "roe":     metrics.get('roeTTM'),
-            "margin":  metrics.get('netProfitMarginTTM'),
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()})
+    .results-table td {
+      padding: 13px 16px;
+      vertical-align: middle;
+    }
 
-@app.route('/run-analysis', methods=['POST', 'OPTIONS'])
-def run_analysis():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    try:
-        force = request.get_json(silent=True) or {}
-        force_refresh = force.get('force', False)
+    .results-table td.right { text-align: right; }
 
-        # If force refresh requested, trigger in background and return current cache
-        if force_refresh and not cache["refreshing"]:
-            t = threading.Thread(target=run_full_analysis, daemon=True)
-            t.start()
+    .rank-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-muted);
+      width: 32px;
+    }
 
-        # Return cached results if available
-        if cache["results"]:
-            return jsonify({
-                "success":    True,
-                "timestamp":  cache["timestamp"],
-                "count":      cache["count"],
-                "results":    cache["results"],
-                "refreshing": cache["refreshing"],
-                "cached":     True,
-            })
+    .company-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+    }
 
-        # No cache yet — still loading
-        if cache["refreshing"]:
-            return jsonify({
-                "success": False,
-                "loading": True,
-                "error":   "Analysis is running for the first time, please wait a moment and try again."
-            }), 202
+    .company-meta {
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 1px;
+    }
 
-        # Fallback: trigger fresh analysis synchronously if cache empty and not refreshing
-        run_full_analysis()
-        return jsonify({
-            "success":   True,
-            "timestamp": cache["timestamp"],
-            "count":     cache["count"],
-            "results":   cache["results"],
-            "cached":    False,
-        })
+    .ticker-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: #060E1A;
+      border: 1px solid var(--rule);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--ink-mid);
+    }
 
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+    /* ── Score bar ── */
+    .score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+    }
 
-@app.route('/refresh-watchlist', methods=['POST', 'OPTIONS'])
-def refresh_watchlist():
-    if request.method == 'OPTIONS':
-        return make_response('', 204)
-    try:
-        tickers = request.get_json().get("tickers", [])
-        if not tickers:
-            return jsonify({"success": False, "error": "No tickers provided"}), 400
-        sector_pe_avgs = compute_sector_pe_avgs(tickers)
-        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in tickers) if r]
-        return jsonify({
-            "success":   True,
-            "timestamp": datetime.utcnow().isoformat(),
-            "results":   results
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    .score-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 15px;
+      width: 32px;
+      text-align: right;
+    }
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    .score-bar-bg {
+      width: 80px;
+      height: 5px;
+      background: var(--rule);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .score-high .score-num { color: var(--green); }
+    .score-high .score-bar-fill { background: var(--green); }
+
+    .score-mid .score-num { color: var(--amber); }
+    .score-mid .score-bar-fill { background: var(--amber); }
+
+    .score-low .score-num { color: var(--ink-muted); }
+    .score-low .score-bar-fill { background: var(--rule); }
+
+    /* ── Status badge ── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .badge-value {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .badge-watch {
+      background: var(--amber-bg);
+      color: var(--amber);
+    }
+
+    .badge-fair {
+      background: #162B4A;
+      color: var(--ink-muted);
+      border: 1px solid var(--rule);
+    }
+
+    /* ── Watchlist button ── */
+    .btn-watch {
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+
+    .btn-watch:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .btn-watch.added {
+      background: var(--gold-light);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+    }
+
+    .empty-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .empty-body {
+      font-size: 13px;
+      color: var(--ink-muted);
+      max-width: 320px;
+      margin: 0 auto 20px;
+    }
+
+    /* ── Watchlist cards ── */
+    .watchlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+
+    .watch-card {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 18px 20px;
+      transition: box-shadow 0.15s;
+    }
+
+    .watch-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    }
+
+    .watch-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .watch-card-meta {
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .watch-card-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .watch-stat {
+      background: #0D1828;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .watch-stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .watch-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    .watch-stat-value.positive { color: var(--green); }
+    .watch-stat-value.negative { color: var(--red); }
+
+    .watch-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      font-size: 11px;
+      color: var(--ink-muted);
+      cursor: pointer;
+      padding: 4px;
+      transition: color 0.12s;
+    }
+
+    .btn-remove:hover { color: var(--red); }
+
+    /* ── Last run info ── */
+    .last-run {
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 16px;
+    }
+
+    /* ── Score delta ── */
+    .delta {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .delta.up { color: var(--green); }
+    .delta.down { color: var(--red); }
+    .delta.flat { color: var(--ink-muted); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      main { padding: 20px 16px; }
+      .results-table th:nth-child(4),
+      .results-table td:nth-child(4) { display: none; }
+      .panel-header { flex-direction: column; align-items: stretch; }
+      .btn-run { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">margin<span>.</span></div>
+  <div class="tagline">Value Stock Screener · S&amp;P 500</div>
+</header>
+
+<nav>
+  <div class="nav-tab active" onclick="showTab('analysis')">Analysis</div>
+  <div class="nav-tab" onclick="showTab('watchlist')">
+    Watchlist <span class="watchlist-badge" id="watchBadge">0</span>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ── ANALYSIS TAB ── -->
+  <div id="tab-analysis">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">S&amp;P 500 Value Screen</div>
+        <div class="panel-sub">Scores 30 S&amp;P 500 companies across DCF, quality, balance sheet, earnings, and valuation. Results refresh automatically every 24 hours.</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn-watch" id="forceRefreshBtn" onclick="runAnalysis(true)" style="padding:11px 16px;font-size:12px">↻ Force Refresh</button>
+        <button class="btn-run" id="runBtn" onclick="runAnalysis(false)">
+          <div class="icon" id="runIcon"></div>
+          Load Results
+        </button>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label" id="progressLabel">Loading results…</div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <div id="analysisResults">
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◎</div>
+        <div class="empty-title">No results loaded yet</div>
+        <div class="empty-body">Tap "Load Results" to fetch the latest scores. Results are cached and update automatically every 24 hours.</div>
+      </div>
+
+      <!-- Results (hidden until run) -->
+      <div id="resultsSection" style="display:none">
+        <div class="last-run" id="lastRunLabel"></div>
+
+        <div class="filters">
+          <span class="filter-label">Status:</span>
+          <button class="filter-btn active" onclick="filterStatus(this,'all')">All</button>
+          <button class="filter-btn" onclick="filterStatus(this,'value')">Value</button>
+          <button class="filter-btn" onclick="filterStatus(this,'watch')">Watch</button>
+        </div>
+
+        <div class="results-card">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Company</th>
+                <th>Sector</th>
+                <th class="right">Margin of Safety</th>
+                <th class="right">Value Score</th>
+                <th class="right">Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WATCHLIST TAB ── -->
+  <div id="tab-watchlist" style="display:none">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Your watchlist</div>
+        <div class="panel-sub">Companies you're tracking. Refresh to re-score against latest data.</div>
+      </div>
+      <button class="btn-run" id="refreshBtn" onclick="refreshWatchlist()">
+        <div class="icon" id="refreshIcon"></div>
+        Refresh Watchlist
+      </button>
+    </div>
+
+    <div id="watchlistEmpty" class="empty-state">
+      <div class="empty-icon">☆</div>
+      <div class="empty-title">Nothing here yet</div>
+      <div class="empty-body">Run the analysis and add companies you're interested in. They'll live here for easy tracking.</div>
+    </div>
+
+    <div class="watchlist-grid" id="watchlistGrid"></div>
+  </div>
+
+</main>
+
+<script>
+  // ── Config: update this after deploying to Render ──
+  const API_BASE = '';
+
+  // ── State ──
+  let watchlist = JSON.parse(localStorage.getItem('margin_watchlist') || '[]');
+  let lastResults = [];
+  let analysisRan = false;
+  let currentFilter = { index: 'all', status: 'all' };
+
+  // ── Tab switching ──
+  function showTab(tab) {
+    document.getElementById('tab-analysis').style.display  = tab === 'analysis'  ? '' : 'none';
+    document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
+    document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', (tab==='analysis'&&i===0)||(tab==='watchlist'&&i===1)));
+    if (tab === 'watchlist') renderWatchlist();
+  }
+
+  // ── Run analysis ──
+  async function runAnalysis(force = false) {
+    const btn = document.getElementById('runBtn');
+    const prog = document.getElementById('progressWrap');
+    const fill = document.getElementById('progressFill');
+    const label = document.getElementById('progressLabel');
+
+    btn.classList.add('running');
+    btn.disabled = true;
+    prog.classList.add('visible');
+    fill.style.background = 'var(--gold)';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'none';
+    fill.style.width = '30%';
+    label.textContent = force ? 'Triggering fresh analysis in background…' : 'Fetching latest results…';
+
+    try {
+      const res = await fetch(`${API_BASE}/run-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force })
+      });
+
+      // Handle 202 — still loading for first time
+      if (res.status === 202) {
+        fill.style.width = '60%';
+        label.textContent = 'Analysis running for the first time — please wait 2-3 minutes and try again.';
+        btn.classList.remove('running');
+        btn.disabled = false;
+        document.getElementById('emptyState').style.display = '';
+        return;
+      }
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(parseErr) {
+        throw new Error('Bad response: ' + text.substring(0, 300));
+      }
+
+      if (!data.success) throw new Error(data.error || 'Analysis failed');
+
+      fill.style.width = '100%';
+      const cacheNote = data.cached ? ' (cached)' : '';
+      label.textContent = `${data.count} companies scored${cacheNote}`;
+      lastResults = data.results;
+
+      // Show if a background refresh was triggered
+      if (force && data.refreshing) {
+        label.textContent = 'Showing current results — fresh analysis running in background.';
+      }
+
+      setTimeout(() => {
+        prog.classList.remove('visible');
+        btn.classList.remove('running');
+        btn.disabled = false;
+        showResults(data.timestamp, data.cached);
+      }, 800);
+
+    } catch (err) {
+      fill.style.width = '100%';
+      fill.style.background = 'var(--red)';
+      label.textContent = `Error: ${err.message}`;
+      btn.classList.remove('running');
+      btn.disabled = false;
+    }
+  }
+
+  function showResults(timestamp, cached) {
+    analysisRan = true;
+    document.getElementById('resultsSection').style.display = '';
+    const d = timestamp ? new Date(timestamp) : new Date();
+    const cacheNote = cached ? ' · cached' : '';
+    document.getElementById('lastRunLabel').textContent =
+      'Data from: ' + d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) +
+      ' at ' + d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) + cacheNote;
+    renderTable(lastResults);
+  }
+
+  // ── Render table ──
+  function renderTable(data) {
+    const body = document.getElementById('resultsBody');
+    const filtered = data.filter(r => {
+      const idxKey = r.index === 'S&P 500' ? 'sp500' : 'ftse100';
+      const idxOk = currentFilter.index === 'all' || idxKey === currentFilter.index;
+      const stOk  = currentFilter.status === 'all' || r.status === currentFilter.status;
+      return idxOk && stOk;
+    });
+
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--ink-muted);font-size:13px">No companies match this filter.</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = filtered.map(r => {
+      const inWatch = watchlist.some(w => w.ticker === r.ticker);
+      const scoreClass = r.score >= 75 ? 'score-high' : r.score >= 60 ? 'score-mid' : 'score-low';
+      const badgeClass = r.status === 'value' ? 'badge-value' : r.status === 'watch' ? 'badge-watch' : 'badge-fair';
+      const badgeLabel = r.status === 'value' ? '✓ Value' : r.status === 'watch' ? '⚡ Watch' : 'Fair value';
+      const currency = r.currency === 'GBp' ? 'p' : (r.currency === 'GBP' ? '£' : '$');
+      return `
+        <tr>
+          <td class="rank-num">${r.rank}</td>
+          <td>
+            <div class="company-name">${r.name}</div>
+            <div class="company-meta">${r.index} · <span class="ticker-chip">${r.ticker}</span></div>
+          </td>
+          <td><span style="font-size:12px;color:var(--ink-mid)">${r.sector}</span></td>
+          <td class="right">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:${r.mos>10?'var(--green)':r.mos>5?'var(--amber)':'var(--ink-muted)'}">${r.mos > 0 ? '+' : ''}${r.mos}%</span>
+          </td>
+          <td class="right">
+            <div class="score-wrap ${scoreClass}">
+              <div class="score-bar-bg"><div class="score-bar-fill" style="width:${r.score}%"></div></div>
+              <div class="score-num">${r.score}</div>
+            </div>
+          </td>
+          <td class="right"><span class="status-badge ${badgeClass}">${badgeLabel}</span></td>
+          <td class="right">
+            <button class="btn-watch ${inWatch ? 'added' : ''}" onclick="toggleWatch(event,'${r.ticker}')">
+              ${inWatch ? '★ Watching' : '☆ Watch'}
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── Filters ──
+  function filterIndex(btn, val) {
+    currentFilter.index = val;
+    btn.closest('.filters').querySelectorAll('.filter-btn').forEach(b => {
+      if (['all','sp500','ftse100'].some(v => b.getAttribute('onclick')?.includes("'"+v+"'"))) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (analysisRan) renderTable(lastResults);
+  }
+
+  function filterStatus(btn, val) {
+    currentFilter.status = val;
+    btn.closest('.filters').querySelectorAll('.filter-btn').forEach(b => {
+      if (['all','value','watch','fair'].some(v => b.getAttribute('onclick')?.includes("'"+v+"'"))) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (analysisRan) renderTable(lastResults);
+  }
+
+  // ── Watchlist ──
+  function toggleWatch(e, ticker) {
+    e.stopPropagation();
+    const company = lastResults.find(r => r.ticker === ticker);
+    const idx = watchlist.findIndex(w => w.ticker === ticker);
+    if (idx === -1 && company) {
+      watchlist.push({
+        ...company,
+        addedPrice: company.price,
+        addedScore: company.score,
+        addedDate: new Date().toLocaleDateString('en-GB')
+      });
+    } else {
+      watchlist.splice(idx, 1);
+    }
+    localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+    updateBadge();
+    renderTable(lastResults);
+  }
+
+  function updateBadge() {
+    document.getElementById('watchBadge').textContent = watchlist.length;
+  }
+
+  function renderWatchlist() {
+    const grid = document.getElementById('watchlistGrid');
+    const empty = document.getElementById('watchlistEmpty');
+    if (watchlist.length === 0) {
+      empty.style.display = '';
+      grid.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = watchlist.map(w => {
+      const scoreDelta = w.score - w.addedScore;
+      const deltaClass = scoreDelta > 0 ? 'up' : scoreDelta < 0 ? 'down' : 'flat';
+      const deltaStr = scoreDelta > 0 ? `▲ +${scoreDelta}` : scoreDelta < 0 ? `▼ ${scoreDelta}` : '─ 0';
+      const badgeClass = w.status === 'value' ? 'badge-value' : w.status === 'watch' ? 'badge-watch' : 'badge-fair';
+      const badgeLabel = w.status === 'value' ? '✓ Value' : w.status === 'watch' ? '⚡ Watch' : 'Fair value';
+      const currency = w.currency === 'GBp' ? 'p' : (w.currency === 'GBP' ? '£' : '$');
+      return `
+        <div class="watch-card">
+          <div class="watch-card-header">
+            <div>
+              <div class="company-name">${w.name}</div>
+              <div class="watch-card-meta"><span class="ticker-chip">${w.ticker}</span> · Added ${w.addedDate}</div>
+            </div>
+            <span class="status-badge ${badgeClass}">${badgeLabel}</span>
+          </div>
+          <div class="watch-card-body">
+            <div class="watch-stat">
+              <div class="watch-stat-label">Value Score</div>
+              <div class="watch-stat-value">${w.score} <span class="delta ${deltaClass}" style="font-size:10px">${deltaStr}</span></div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Margin of Safety</div>
+              <div class="watch-stat-value ${w.mos>0?'positive':''}">${w.mos>0?'+':''}${w.mos}%</div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Price when added</div>
+              <div class="watch-stat-value">${currency}${w.addedPrice}</div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Current price</div>
+              <div class="watch-stat-value">${currency}${w.price}</div>
+            </div>
+          </div>
+          <div class="watch-card-footer">
+            <span style="font-size:11px;color:var(--ink-muted)">Score when added: <strong>${w.addedScore}</strong></span>
+            <button class="btn-remove" onclick="removeWatch('${w.ticker}')">Remove ✕</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function removeWatch(ticker) {
+    watchlist = watchlist.filter(w => w.ticker !== ticker);
+    localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+    updateBadge();
+    renderWatchlist();
+  }
+
+  async function refreshWatchlist() {
+    if (watchlist.length === 0) return;
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('running');
+    btn.disabled = true;
+
+    try {
+      const tickers = watchlist.map(w => w.ticker);
+      const res = await fetch(`${API_BASE}/refresh-watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Update watchlist scores with fresh data
+        data.results.forEach(fresh => {
+          const idx = watchlist.findIndex(w => w.ticker === fresh.ticker);
+          if (idx !== -1) {
+            watchlist[idx] = { ...watchlist[idx], ...fresh };
+          }
+        });
+        localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+        renderWatchlist();
+      }
+    } catch (err) {
+      console.error('Refresh failed:', err);
+    } finally {
+      btn.classList.remove('running');
+      btn.disabled = false;
+    }
+  }
+
+  // ── Init ──
+  updateBadge();
+</script>
+</body>
+</html>
