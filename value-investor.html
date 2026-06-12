@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Margin — Value Stock Screener</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:        #F0F4FF;
+      --ink-mid:    #B8C4D8;
+      --ink-muted:  #6B7A99;
+      --rule:       #1E2D4A;
+      --surface:    #0D1828;
+      --white:      #112240;
+      --gold:       #C9A84C;
+      --gold-light: #1E1A08;
+      --green:      #4ECDC4;
+      --green-bg:   #0D2A28;
+      --amber:      #F4A261;
+      --amber-bg:   #2A1A08;
+      --red:        #E07070;
+      --red-bg:     #3A1A1A;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0D1828;
+      color: var(--ink);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #060E1A;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--white);
+      letter-spacing: -0.3px;
+    }
+
+    .logo span {
+      color: var(--gold);
+      font-style: italic;
+    }
+
+    .tagline {
+      font-size: 11px;
+      color: var(--ink-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ── Nav tabs ── */
+    nav {
+      background: #0D1E38;
+      border-bottom: 1px solid var(--rule);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+
+    .nav-tab {
+      padding: 14px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .nav-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--gold);
+    }
+
+    .nav-tab:hover:not(.active) {
+      color: var(--ink-mid);
+    }
+
+    .watchlist-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gold);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-left: 6px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    /* ── Panel header ── */
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .panel-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+
+    .panel-sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: 4px;
+    }
+
+    /* ── Run button ── */
+    .btn-run {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--gold);
+      color: #0D160D;
+      border: none;
+      padding: 11px 22px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-run:hover { background: #D9A84C; }
+    .btn-run:active { transform: scale(0.98); }
+
+    .btn-run .icon {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(13,24,40,0.4);
+      border-top-color: #060E1A;
+      border-radius: 50%;
+      animation: none;
+    }
+
+    .btn-run.running .icon {
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .progress-wrap.visible { display: block; }
+
+    .progress-label {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-bottom: 10px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .progress-bar-bg {
+      background: var(--rule);
+      border-radius: 3px;
+      height: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-label {
+      font-size: 12px;
+      color: var(--ink-muted);
+      font-weight: 500;
+    }
+
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--rule);
+      background: #112240;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      color: var(--ink-mid);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .filter-btn.active {
+      background: var(--gold);
+      color: #0D160D;
+      border-color: var(--gold);
+    }
+
+    .filter-btn:hover:not(.active) {
+      border-color: var(--gold);
+      color: var(--ink);
+    }
+
+    /* ── Results table ── */
+    .results-card {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .results-table thead tr {
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .results-table th {
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+
+    .results-table th.right { text-align: right; }
+
+    .results-table tbody tr {
+      border-bottom: 1px solid var(--rule);
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+
+    .results-table tbody tr:last-child { border-bottom: none; }
+    .results-table tbody tr:hover { background: #162B4A; }
+
+    .results-table td {
+      padding: 13px 16px;
+      vertical-align: middle;
+    }
+
+    .results-table td.right { text-align: right; }
+
+    .rank-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-muted);
+      width: 32px;
+    }
+
+    .company-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .company-meta {
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 1px;
+    }
+
+    .ticker-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: #060E1A;
+      border: 1px solid var(--rule);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--ink-mid);
+    }
+
+    /* ── Score bar ── */
+    .score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .score-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 15px;
+      width: 32px;
+      text-align: right;
+    }
+
+    .score-bar-bg {
+      width: 80px;
+      height: 5px;
+      background: var(--rule);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .score-high .score-num { color: var(--green); }
+    .score-high .score-bar-fill { background: var(--green); }
+
+    .score-mid .score-num { color: var(--amber); }
+    .score-mid .score-bar-fill { background: var(--amber); }
+
+    .score-low .score-num { color: var(--ink-muted); }
+    .score-low .score-bar-fill { background: var(--rule); }
+
+    /* ── Status badge ── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .badge-value {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .badge-watch {
+      background: var(--amber-bg);
+      color: var(--amber);
+    }
+
+    .badge-fair {
+      background: #162B4A;
+      color: var(--ink-muted);
+      border: 1px solid var(--rule);
+    }
+
+    /* ── Watchlist button ── */
+    .btn-watch {
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+
+    .btn-watch:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .btn-watch.added {
+      background: var(--gold-light);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+    }
+
+    .empty-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .empty-body {
+      font-size: 13px;
+      color: var(--ink-muted);
+      max-width: 320px;
+      margin: 0 auto 20px;
+    }
+
+    /* ── Watchlist cards ── */
+    .watchlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+
+    .watch-card {
+      background: #112240;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 18px 20px;
+      transition: box-shadow 0.15s;
+    }
+
+    .watch-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+    }
+
+    .watch-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .watch-card-meta {
+      font-size: 11px;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .watch-card-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .watch-stat {
+      background: #0D1828;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .watch-stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .watch-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    .watch-stat-value.positive { color: var(--green); }
+    .watch-stat-value.negative { color: var(--red); }
+
+    .watch-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      font-size: 11px;
+      color: var(--ink-muted);
+      cursor: pointer;
+      padding: 4px;
+      transition: color 0.12s;
+    }
+
+    .btn-remove:hover { color: var(--red); }
+
+    /* ── Last run info ── */
+    .last-run {
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 16px;
+    }
+
+    /* ── Score delta ── */
+    .delta {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .delta.up { color: var(--green); }
+    .delta.down { color: var(--red); }
+    .delta.flat { color: var(--ink-muted); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      main { padding: 20px 16px; }
+      .results-table th:nth-child(4),
+      .results-table td:nth-child(4) { display: none; }
+      .panel-header { flex-direction: column; align-items: stretch; }
+      .btn-run { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">margin<span>.</span></div>
+  <div class="tagline">Value Stock Screener · S&amp;P 500 &amp; FTSE 100</div>
+</header>
+
+<nav>
+  <div class="nav-tab active" onclick="showTab('analysis')">Analysis</div>
+  <div class="nav-tab" onclick="showTab('watchlist')">
+    Watchlist <span class="watchlist-badge" id="watchBadge">0</span>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ── ANALYSIS TAB ── -->
+  <div id="tab-analysis">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Run a fresh analysis</div>
+        <div class="panel-sub">Scores 600+ companies across DCF, quality, balance sheet, earnings, and valuation.</div>
+      </div>
+      <button class="btn-run" id="runBtn" onclick="runAnalysis()">
+        <div class="icon" id="runIcon"></div>
+        Run Analysis
+      </button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label" id="progressLabel">Fetching S&amp;P 500 data…</div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <div id="analysisResults">
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◎</div>
+        <div class="empty-title">No analysis run yet</div>
+        <div class="empty-body">Hit "Run Analysis" to screen the S&amp;P 500 and FTSE 100 for value opportunities using Buffett-style fundamentals.</div>
+      </div>
+
+      <!-- Results (hidden until run) -->
+      <div id="resultsSection" style="display:none">
+        <div class="last-run" id="lastRunLabel"></div>
+
+        <div class="filters">
+          <span class="filter-label">Index:</span>
+          <button class="filter-btn active" onclick="filterIndex(this,'all')">All</button>
+          <button class="filter-btn" onclick="filterIndex(this,'sp500')">S&amp;P 500</button>
+          <button class="filter-btn" onclick="filterIndex(this,'ftse100')">FTSE 100</button>
+          <span class="filter-label" style="margin-left:8px">Status:</span>
+          <button class="filter-btn active" onclick="filterStatus(this,'all')">All</button>
+          <button class="filter-btn" onclick="filterStatus(this,'value')">Value</button>
+          <button class="filter-btn" onclick="filterStatus(this,'watch')">Watch</button>
+        </div>
+
+        <div class="results-card">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Company</th>
+                <th>Sector</th>
+                <th class="right">Margin of Safety</th>
+                <th class="right">Value Score</th>
+                <th class="right">Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WATCHLIST TAB ── -->
+  <div id="tab-watchlist" style="display:none">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Your watchlist</div>
+        <div class="panel-sub">Companies you're tracking. Refresh to re-score against latest data.</div>
+      </div>
+      <button class="btn-run" id="refreshBtn" onclick="refreshWatchlist()">
+        <div class="icon" id="refreshIcon"></div>
+        Refresh Watchlist
+      </button>
+    </div>
+
+    <div id="watchlistEmpty" class="empty-state">
+      <div class="empty-icon">☆</div>
+      <div class="empty-title">Nothing here yet</div>
+      <div class="empty-body">Run the analysis and add companies you're interested in. They'll live here for easy tracking.</div>
+    </div>
+
+    <div class="watchlist-grid" id="watchlistGrid"></div>
+  </div>
+
+</main>
+
+<script>
+  // ── Config: update this after deploying to Render ──
+  const API_BASE = 'https://margin-screener-api.onrender.com';
+
+  // ── State ──
+  let watchlist = JSON.parse(localStorage.getItem('margin_watchlist') || '[]');
+  let lastResults = [];
+  let analysisRan = false;
+  let currentFilter = { index: 'all', status: 'all' };
+
+  // ── Tab switching ──
+  function showTab(tab) {
+    document.getElementById('tab-analysis').style.display  = tab === 'analysis'  ? '' : 'none';
+    document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
+    document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', (tab==='analysis'&&i===0)||(tab==='watchlist'&&i===1)));
+    if (tab === 'watchlist') renderWatchlist();
+  }
+
+  // ── Run analysis ──
+  async function runAnalysis() {
+    const btn = document.getElementById('runBtn');
+    const prog = document.getElementById('progressWrap');
+    const fill = document.getElementById('progressFill');
+    const label = document.getElementById('progressLabel');
+
+    btn.classList.add('running');
+    btn.disabled = true;
+    prog.classList.add('visible');
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    // Animate progress bar while API call runs in background
+    const steps = [
+      [15,  'Fetching S&P 500 fundamentals…'],
+      [35,  'Fetching FTSE 100 fundamentals…'],
+      [55,  'Running DCF models…'],
+      [72,  'Scoring business quality…'],
+      [85,  'Normalising by sector…'],
+      [95,  'Building rankings…'],
+    ];
+    let si = 0;
+    const tick = setInterval(() => {
+      if (si < steps.length) {
+        fill.style.width = steps[si][0] + '%';
+        label.textContent = steps[si][1];
+        si++;
+      }
+    }, 3000);
+
+    try {
+      const res = await fetch(`${API_BASE}/run-analysis`, { method: 'POST' });
+      const data = await res.json();
+      clearInterval(tick);
+
+      if (!data.success) throw new Error(data.error || 'Analysis failed');
+
+      fill.style.width = '100%';
+      label.textContent = `Done — ${data.count} companies scored.`;
+      lastResults = data.results;
+
+      setTimeout(() => {
+        prog.classList.remove('visible');
+        btn.classList.remove('running');
+        btn.disabled = false;
+        showResults(data.timestamp);
+      }, 600);
+
+    } catch (err) {
+      clearInterval(tick);
+      label.textContent = `Error: ${err.message}`;
+      fill.style.width = '100%';
+      fill.style.background = 'var(--red)';
+      btn.classList.remove('running');
+      btn.disabled = false;
+    }
+  }
+
+  function showResults(timestamp) {
+    analysisRan = true;
+    document.getElementById('resultsSection').style.display = '';
+    const d = timestamp ? new Date(timestamp) : new Date();
+    document.getElementById('lastRunLabel').textContent =
+      'Last run: ' + d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) +
+      ' at ' + d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+    renderTable(lastResults);
+  }
+
+  // ── Render table ──
+  function renderTable(data) {
+    const body = document.getElementById('resultsBody');
+    const filtered = data.filter(r => {
+      const idxKey = r.index === 'S&P 500' ? 'sp500' : 'ftse100';
+      const idxOk = currentFilter.index === 'all' || idxKey === currentFilter.index;
+      const stOk  = currentFilter.status === 'all' || r.status === currentFilter.status;
+      return idxOk && stOk;
+    });
+
+    if (filtered.length === 0) {
+      body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--ink-muted);font-size:13px">No companies match this filter.</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = filtered.map(r => {
+      const inWatch = watchlist.some(w => w.ticker === r.ticker);
+      const scoreClass = r.score >= 75 ? 'score-high' : r.score >= 60 ? 'score-mid' : 'score-low';
+      const badgeClass = r.status === 'value' ? 'badge-value' : r.status === 'watch' ? 'badge-watch' : 'badge-fair';
+      const badgeLabel = r.status === 'value' ? '✓ Value' : r.status === 'watch' ? '⚡ Watch' : 'Fair value';
+      const currency = r.currency === 'GBp' ? 'p' : (r.currency === 'GBP' ? '£' : '$');
+      return `
+        <tr>
+          <td class="rank-num">${r.rank}</td>
+          <td>
+            <div class="company-name">${r.name}</div>
+            <div class="company-meta">${r.index} · <span class="ticker-chip">${r.ticker}</span></div>
+          </td>
+          <td><span style="font-size:12px;color:var(--ink-mid)">${r.sector}</span></td>
+          <td class="right">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:${r.mos>10?'var(--green)':r.mos>5?'var(--amber)':'var(--ink-muted)'}">${r.mos > 0 ? '+' : ''}${r.mos}%</span>
+          </td>
+          <td class="right">
+            <div class="score-wrap ${scoreClass}">
+              <div class="score-bar-bg"><div class="score-bar-fill" style="width:${r.score}%"></div></div>
+              <div class="score-num">${r.score}</div>
+            </div>
+          </td>
+          <td class="right"><span class="status-badge ${badgeClass}">${badgeLabel}</span></td>
+          <td class="right">
+            <button class="btn-watch ${inWatch ? 'added' : ''}" onclick="toggleWatch(event,'${r.ticker}')">
+              ${inWatch ? '★ Watching' : '☆ Watch'}
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ── Filters ──
+  function filterIndex(btn, val) {
+    currentFilter.index = val;
+    btn.closest('.filters').querySelectorAll('.filter-btn').forEach(b => {
+      if (['all','sp500','ftse100'].some(v => b.getAttribute('onclick')?.includes("'"+v+"'"))) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (analysisRan) renderTable(lastResults);
+  }
+
+  function filterStatus(btn, val) {
+    currentFilter.status = val;
+    btn.closest('.filters').querySelectorAll('.filter-btn').forEach(b => {
+      if (['all','value','watch','fair'].some(v => b.getAttribute('onclick')?.includes("'"+v+"'"))) b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (analysisRan) renderTable(lastResults);
+  }
+
+  // ── Watchlist ──
+  function toggleWatch(e, ticker) {
+    e.stopPropagation();
+    const company = lastResults.find(r => r.ticker === ticker);
+    const idx = watchlist.findIndex(w => w.ticker === ticker);
+    if (idx === -1 && company) {
+      watchlist.push({
+        ...company,
+        addedPrice: company.price,
+        addedScore: company.score,
+        addedDate: new Date().toLocaleDateString('en-GB')
+      });
+    } else {
+      watchlist.splice(idx, 1);
+    }
+    localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+    updateBadge();
+    renderTable(lastResults);
+  }
+
+  function updateBadge() {
+    document.getElementById('watchBadge').textContent = watchlist.length;
+  }
+
+  function renderWatchlist() {
+    const grid = document.getElementById('watchlistGrid');
+    const empty = document.getElementById('watchlistEmpty');
+    if (watchlist.length === 0) {
+      empty.style.display = '';
+      grid.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = watchlist.map(w => {
+      const scoreDelta = w.score - w.addedScore;
+      const deltaClass = scoreDelta > 0 ? 'up' : scoreDelta < 0 ? 'down' : 'flat';
+      const deltaStr = scoreDelta > 0 ? `▲ +${scoreDelta}` : scoreDelta < 0 ? `▼ ${scoreDelta}` : '─ 0';
+      const badgeClass = w.status === 'value' ? 'badge-value' : w.status === 'watch' ? 'badge-watch' : 'badge-fair';
+      const badgeLabel = w.status === 'value' ? '✓ Value' : w.status === 'watch' ? '⚡ Watch' : 'Fair value';
+      const currency = w.currency === 'GBp' ? 'p' : (w.currency === 'GBP' ? '£' : '$');
+      return `
+        <div class="watch-card">
+          <div class="watch-card-header">
+            <div>
+              <div class="company-name">${w.name}</div>
+              <div class="watch-card-meta"><span class="ticker-chip">${w.ticker}</span> · Added ${w.addedDate}</div>
+            </div>
+            <span class="status-badge ${badgeClass}">${badgeLabel}</span>
+          </div>
+          <div class="watch-card-body">
+            <div class="watch-stat">
+              <div class="watch-stat-label">Value Score</div>
+              <div class="watch-stat-value">${w.score} <span class="delta ${deltaClass}" style="font-size:10px">${deltaStr}</span></div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Margin of Safety</div>
+              <div class="watch-stat-value ${w.mos>0?'positive':''}">${w.mos>0?'+':''}${w.mos}%</div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Price when added</div>
+              <div class="watch-stat-value">${currency}${w.addedPrice}</div>
+            </div>
+            <div class="watch-stat">
+              <div class="watch-stat-label">Current price</div>
+              <div class="watch-stat-value">${currency}${w.price}</div>
+            </div>
+          </div>
+          <div class="watch-card-footer">
+            <span style="font-size:11px;color:var(--ink-muted)">Score when added: <strong>${w.addedScore}</strong></span>
+            <button class="btn-remove" onclick="removeWatch('${w.ticker}')">Remove ✕</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function removeWatch(ticker) {
+    watchlist = watchlist.filter(w => w.ticker !== ticker);
+    localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+    updateBadge();
+    renderWatchlist();
+  }
+
+  async function refreshWatchlist() {
+    if (watchlist.length === 0) return;
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('running');
+    btn.disabled = true;
+
+    try {
+      const tickers = watchlist.map(w => w.ticker);
+      const res = await fetch(`${API_BASE}/refresh-watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Update watchlist scores with fresh data
+        data.results.forEach(fresh => {
+          const idx = watchlist.findIndex(w => w.ticker === fresh.ticker);
+          if (idx !== -1) {
+            watchlist[idx] = { ...watchlist[idx], ...fresh };
+          }
+        });
+        localStorage.setItem('margin_watchlist', JSON.stringify(watchlist));
+        renderWatchlist();
+      }
+    } catch (err) {
+      console.error('Refresh failed:', err);
+    } finally {
+      btn.classList.remove('running');
+      btn.disabled = false;
+    }
+  }
+
+  // ── Init ──
+  updateBadge();
+</script>
+</body>
+</html>
