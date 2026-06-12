@@ -4,11 +4,22 @@ import numpy as np
 from datetime import datetime
 import traceback
 import os
+import threading
+import time
 
 app = Flask(__name__, static_folder='static')
 
 API_KEY = os.environ.get('FINNHUB_API_KEY', '')
 FH_BASE = 'https://finnhub.io/api/v1'
+
+# ── Cache ────────────────────────────────────────────────────────────────────
+cache = {
+    "results":   [],
+    "timestamp": None,
+    "count":     0,
+    "refreshing": False,
+}
+CACHE_TTL_HOURS = 24
 
 @app.after_request
 def after_request(response):
@@ -204,9 +215,49 @@ def compute_sector_pe_avgs(tickers):
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+def run_full_analysis():
+    """Runs the full analysis and stores results in cache."""
+    if cache["refreshing"]:
+        return
+    cache["refreshing"] = True
+    print(f"[{datetime.utcnow().isoformat()}] Starting analysis...")
+    try:
+        sector_pe_avgs = compute_sector_pe_avgs(SP500_TICKERS)
+        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in SP500_TICKERS) if r]
+        results.sort(key=lambda x: x["score"], reverse=True)
+        for i, r in enumerate(results):
+            r["rank"] = i + 1
+        cache["results"]   = results
+        cache["timestamp"] = datetime.utcnow().isoformat()
+        cache["count"]     = len(results)
+        print(f"[{datetime.utcnow().isoformat()}] Analysis complete — {len(results)} companies scored.")
+    except Exception as e:
+        print(f"Analysis error: {e}")
+    finally:
+        cache["refreshing"] = False
+
+def background_scheduler():
+    """Runs analysis once on startup, then every 24 hours."""
+    time.sleep(5)  # brief delay to let server start
+    while True:
+        run_full_analysis()
+        time.sleep(CACHE_TTL_HOURS * 3600)
+
+# Start background thread
+scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
+scheduler_thread.start()
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+    return jsonify({
+        "status":     "ok",
+        "timestamp":  datetime.utcnow().isoformat(),
+        "cached":     cache["timestamp"],
+        "count":      cache["count"],
+        "refreshing": cache["refreshing"],
+    })
 
 @app.route('/test', methods=['GET'])
 def test():
@@ -231,17 +282,43 @@ def run_analysis():
     if request.method == 'OPTIONS':
         return make_response('', 204)
     try:
-        sector_pe_avgs = compute_sector_pe_avgs(SP500_TICKERS)
-        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in SP500_TICKERS) if r]
-        results.sort(key=lambda x: x["score"], reverse=True)
-        for i, r in enumerate(results):
-            r["rank"] = i + 1
+        force = request.get_json(silent=True) or {}
+        force_refresh = force.get('force', False)
+
+        # If force refresh requested, trigger in background and return current cache
+        if force_refresh and not cache["refreshing"]:
+            t = threading.Thread(target=run_full_analysis, daemon=True)
+            t.start()
+
+        # Return cached results if available
+        if cache["results"]:
+            return jsonify({
+                "success":    True,
+                "timestamp":  cache["timestamp"],
+                "count":      cache["count"],
+                "results":    cache["results"],
+                "refreshing": cache["refreshing"],
+                "cached":     True,
+            })
+
+        # No cache yet — still loading
+        if cache["refreshing"]:
+            return jsonify({
+                "success": False,
+                "loading": True,
+                "error":   "Analysis is running for the first time, please wait a moment and try again."
+            }), 202
+
+        # Fallback: trigger fresh analysis synchronously if cache empty and not refreshing
+        run_full_analysis()
         return jsonify({
             "success":   True,
-            "timestamp": datetime.utcnow().isoformat(),
-            "count":     len(results),
-            "results":   results
+            "timestamp": cache["timestamp"],
+            "count":     cache["count"],
+            "results":   cache["results"],
+            "cached":    False,
         })
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
