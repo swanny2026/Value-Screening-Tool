@@ -570,7 +570,7 @@
     <div class="panel-header">
       <div>
         <div class="panel-title">Run a fresh analysis</div>
-        <div class="panel-sub">Scores 600+ companies across DCF, quality, balance sheet, earnings, and valuation.</div>
+        <div class="panel-sub">Scores 30 S&amp;P 500 companies across DCF, quality, balance sheet, earnings, and valuation.</div>
       </div>
       <button class="btn-run" id="runBtn" onclick="runAnalysis()">
         <div class="icon" id="runIcon"></div>
@@ -598,11 +598,7 @@
         <div class="last-run" id="lastRunLabel"></div>
 
         <div class="filters">
-          <span class="filter-label">Index:</span>
-          <button class="filter-btn active" onclick="filterIndex(this,'all')">All</button>
-          <button class="filter-btn" onclick="filterIndex(this,'sp500')">S&amp;P 500</button>
-          <button class="filter-btn" onclick="filterIndex(this,'ftse100')">FTSE 100</button>
-          <span class="filter-label" style="margin-left:8px">Status:</span>
+          <span class="filter-label">Status:</span>
           <button class="filter-btn active" onclick="filterStatus(this,'all')">All</button>
           <button class="filter-btn" onclick="filterStatus(this,'value')">Value</button>
           <button class="filter-btn" onclick="filterStatus(this,'watch')">Watch</button>
@@ -685,11 +681,11 @@
 
     // Animate progress bar while API call runs in background
     const steps = [
-      [15,  'Fetching S&P 500 fundamentals…'],
-      [35,  'Fetching FTSE 100 fundamentals…'],
-      [55,  'Running DCF models…'],
-      [72,  'Scoring business quality…'],
-      [85,  'Normalising by sector…'],
+      [20,  'Fetching S&P 500 fundamentals…'],
+      [40,  'Running DCF models…'],
+      [60,  'Scoring business quality…'],
+      [75,  'Scoring balance sheets…'],
+      [88,  'Normalising by sector…'],
       [95,  'Building rankings…'],
     ];
     let si = 0;
