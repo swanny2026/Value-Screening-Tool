@@ -181,8 +181,21 @@ def compute_sector_pe_avgs(tickers):
             continue
     return {s: np.mean(v) for s, v in sector_pes.items()}
 
-@app.route('/health', methods=['GET'])
-def health():
+@app.route('/test', methods=['GET'])
+def test():
+    try:
+        ticker = yf.Ticker("AAPL")
+        info = ticker.info
+        return jsonify({
+            "success": True,
+            "name": info.get("longName"),
+            "price": info.get("currentPrice"),
+            "pe": info.get("trailingPE")
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()})
+
+
     return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
 
 @app.route('/run-analysis', methods=['POST', 'OPTIONS'])
