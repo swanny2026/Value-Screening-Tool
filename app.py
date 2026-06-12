@@ -7,7 +7,7 @@ from datetime import datetime
 import traceback
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 # ── Index constituents ──────────────────────────────────────────────────────
 # A representative sample for prototyping — expand to full lists later
