@@ -73,21 +73,34 @@ def get_financials(ticker):
 
 def score_dcf(metrics, price):
     try:
-        eps = safe(metrics.get('epsBasicExclExtraItemsAnnual'))
-        pe  = safe(metrics.get('peBasicExclExtraTTM'))
-        if not eps or eps <= 0 or not pe or not price:
+        # Use free cash flow per share approach
+        fcf_per_share = safe(metrics.get('freeCashFlowPerShareTTM'))
+        if not fcf_per_share or fcf_per_share <= 0 or not price:
             return 5, 0
-        growth = min(max(safe(metrics.get('epsGrowth3Y'), 0.05), -0.05), 0.20)
-        discount_rate   = 0.10
-        terminal_growth = 0.025
+
+        # Conservative growth assumptions
+        growth_3y   = safe(metrics.get('epsGrowth3Y'), 0.05)
+        growth_rate = min(max(growth_3y, -0.02), 0.15)  # cap between -2% and 15%
+        discount    = 0.10
+        terminal_g  = 0.025
+        years       = 10
+
+        # Project and discount FCF per share
         intrinsic = 0
-        for yr in range(1, 11):
-            intrinsic += eps * ((1 + growth) ** yr) / ((1 + discount_rate) ** yr)
-        terminal_eps = eps * ((1 + growth) ** 10) * (1 + terminal_growth)
-        intrinsic += (terminal_eps / (discount_rate - terminal_growth)) / ((1 + discount_rate) ** 10)
-        intrinsic_price = intrinsic * (pe / 10)
-        mos = ((intrinsic_price - price) / price) * 100
-        return round(max(0, min(10, 5 + (mos / 6))), 1), round(mos, 1)
+        for yr in range(1, years + 1):
+            intrinsic += fcf_per_share * ((1 + growth_rate) ** yr) / ((1 + discount) ** yr)
+
+        # Terminal value
+        terminal_fcf = fcf_per_share * ((1 + growth_rate) ** years) * (1 + terminal_g)
+        intrinsic += (terminal_fcf / (discount - terminal_g)) / ((1 + discount) ** years)
+
+        # Margin of safety: how much cheaper is the stock vs intrinsic value
+        mos = ((intrinsic - price) / price) * 100
+
+        # Cap MoS display at ±100% to avoid wild numbers
+        mos = max(min(mos, 100), -100)
+        score = max(0, min(10, 5 + (mos / 20)))
+        return round(score, 1), round(mos, 1)
     except Exception:
         return 5, 0
 
