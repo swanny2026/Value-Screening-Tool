@@ -34,20 +34,72 @@ def index():
 
 # ── S&P 500 tickers ─────────────────────────────────────────────────────────
 SP500_TICKERS = [
-    "AAPL","MSFT","GOOGL","JNJ","JPM","PG","KO","WMT","BAC","CVX",
-    "MRK","ABBV","PEP","NKE","MCD","AMGN","TMO","ABT","DHR","INTU",
-    "V","MA","UNH","HD","AVGO","TXN","QCOM","ORCL","HON","COST"
+    # Technology
+    "AAPL","MSFT","NVDA","AVGO","ORCL","CRM","CSCO","ACN","IBM","INTU",
+    "GOOGL","GOOG","META","ADBE","NOW","AMD","QCOM","TXN","MU","AMAT",
+    "LRCX","ADI","KLAC","SNPS","CDNS","ANSS","PTC","CTSH","EPAM","FFIV",
+    "AKAM","JNPR","NTAP","STX","WDC","HPE","HPQ","DELL","NCR","PSTG",
+    # Healthcare
+    "UNH","JNJ","LLY","ABBV","MRK","TMO","ABT","DHR","AMGN","ISRG",
+    "VRTX","REGN","SYK","BDX","MDT","ZTS","ELV","CI","HUM","MCK",
+    "CVS","PFE","MRNA","BIIB","IQV","A","WAT","PKI","HOLX","DXCM",
+    "IDXX","MTD","PODD","RMD","TFX","STE","HSIC","COO","ALGN","TECH",
+    # Financials
+    "BRK-B","JPM","V","MA","BAC","WFC","GS","MS","BLK","SCHW",
+    "AXP","C","USB","PNC","TFC","COF","DFS","AIG","MET","PRU",
+    "BK","STT","NTRS","IVZ","BEN","AMG","AMP","RJF","SF","CBOE",
+    "CME","ICE","NDAQ","MKTX","VIRT","RE","ALL","CB","TRV","PGR",
+    "HIG","AFL","LNC","UNM","FNF","FAF","SFI","CINF","GL","TMK",
+    # Consumer Staples
+    "WMT","PG","KO","PEP","COST","MCD","MDLZ","MO","PM","CL",
+    "SBUX","EL","CHD","CLX","SJM","CAG","CPB","GIS","HRL","MKC",
+    "K","HSY","MNST","STZ","BF-B","TAP","SAM","FIZZ","COKE","KDP",
+    # Consumer Discretionary
+    "AMZN","TSLA","HD","NKE","LOW","TJX","ROST","BKNG","MAR","HLT",
+    "MHK","LVS","MGM","WYNN","CZR","RCL","CCL","NCLH","HAS","MAT",
+    "F","GM","APTV","LEA","BWA","LKQ","AAP","AZO","ORLY","GPC",
+    "DIS","NFLX","PARA","FOX","LYV","IMAX","CNK","AMC","CINEMARK",
+    # Energy
+    "XOM","CVX","COP","EOG","SLB","MPC","PSX","VLO","OXY","HES",
+    "HAL","BKR","NOV","DVN","FANG","PXD","APA","MRO","OVV","CTRA",
+    "LNG","KMI","WMB","OKE","ET","EPD","MPLX","PAA","SHLX","TRGP",
+    # Industrials
+    "GE","HON","RTX","CAT","DE","MMM","LMT","NOC","GD","BA",
+    "UPS","FDX","EMR","ETN","PH","ROK","IR","XYL","PCAR","CUMMINS",
+    "CMI","TT","CARR","OTIS","AME","FTV","ROP","VRSK","BR","PAYC",
+    "WM","RSG","WCN","CLH","SRCL","CWST","HCCI","ACM","PWR","MAS",
+    "SWK","PNR","ALLE","AOS","LII","GNRC","HUBB","FELE","RXN","ATKR",
+    # Materials
+    "LIN","APD","ECL","SHW","PPG","NEM","FCX","VMC","MLM","NUE",
+    "STLD","RS","CMC","ATI","AA","ALB","CE","DD","DOW","LYB",
+    "EMN","HUN","OLN","WLK","TROX","RPM","SON","AVY","SEE","BMS",
+    # Real Estate
+    "PLD","AMT","CCI","EQIX","PSA","SPG","O","WELL","AVB","EQR",
+    "ESS","MAA","UDR","CPT","AIV","NNN","WPC","STOR","VICI","MGP",
+    # Utilities
+    "NEE","SO","DUK","AEP","EXC","SRE","D","PCG","ED","FE",
+    "EIX","PEG","XEL","ES","WEC","ETR","CMS","NI","ATO","LNT",
+    # Communications
+    "GOOGL","META","CMCSA","T","VZ","TMUS","CHTR","DIS","NFLX","PARA",
+    "WBD","LUMN","DISH","SIRI","IPG","OMC","PUB","WPP","TTGT","ZETA",
+    # Fintech & New Tech
+    "PYPL","UBER","LYFT","ABNB","DASH","COIN","RBLX","ZM","SNOW","PLTR",
+    "CRWD","PANW","FTNT","NET","DDOG","OKTA","ZS","TWLO","MDB","HUBS",
 ]
 
 SECTOR_MAP = {
-    "Technology":            ["AAPL","MSFT","GOOGL","AVGO","TXN","QCOM","ORCL","INTU","IBM","AMD","NVDA"],
-    "Healthcare":            ["JNJ","MRK","ABBV","AMGN","TMO","ABT","DHR","UNH","BMY","GILD"],
-    "Financials":            ["JPM","BAC","V","MA","GS","MS","BLK","AXP"],
-    "Consumer Staples":      ["PG","KO","PEP","WMT","MCD","SBUX","MDLZ","COST"],
-    "Consumer Discretionary":["NKE","HD","AMZN","TSLA"],
-    "Energy":                ["CVX"],
-    "Industrials":           ["HON","GE","CAT","RTX","UPS","LIN"],
-    "Utilities":             ["NEE"],
+    "Technology":             ["AAPL","MSFT","GOOGL","GOOG","NVDA","AVGO","CSCO","CRM","ACN","TXN","QCOM","INTU","ORCL","IBM","ADBE","NOW","SNOW","PLTR","AMAT","LRCX","ADI","MU","KLAC","TWLO","OKTA","DDOG","CRWD","PANW","FTNT","CYBR","S","NET"],
+    "Healthcare":             ["JNJ","UNH","MRK","ABBV","TMO","ABT","AMGN","DHR","LLY","REGN","ISRG","SYK","BDX","MDT","ZTS","ELV","CI","HUM","MCK","CVS","PFE","MRNA","BIIB","VRTX","ILMN","IQV","A","WAT","PKI"],
+    "Financials":             ["JPM","V","MA","BAC","GS","MS","AXP","WFC","C","USB","PNC","TFC","COF","DFS","SYF","AIG","MET","SCHW","BK","STT","NTRS","IVZ","BEN","AMG","AMP","CME","ICE","NDAQ","CBOE","MKTX","VIRT","LPLA","RJF","SF"],
+    "Consumer Staples":       ["PG","KO","PEP","WMT","MCD","COST","SBUX","MDLZ","MO","PM","BTI"],
+    "Consumer Discretionary": ["AMZN","TSLA","HD","NKE","LOW","TJX","ROST","VFC","PVH","RL","F","GM","TM","RACE","DIS","NFLX"],
+    "Energy":                 ["XOM","CVX","EOG","COP","PSX","VLO","MPC","OXY","HAL","SLB","BKR","NOV"],
+    "Industrials":            ["RTX","HON","UPS","CAT","GE","MMM","LMT","NOC","GD","BA","DE","EMR","ETN","PH","WM","RSG","WCN"],
+    "Materials":              ["APD","ECL","SHW","PPG","DD","DOW","LIN","NEM","FCX","VMC","LYB","CE","EMN","HUN","OLN","WLK","TROX"],
+    "Real Estate":            ["PLD","AMT","CCI","EQIX","PSA","SPG","O","WELL","AVB","EQR"],
+    "Utilities":              ["NEE","SO","DUK","AEP","EXC","SRE","D","PCG","ED","FE","EIX"],
+    "Communications":         ["CMCSA","T","VZ","TMUS","CHTR","DISH","FOX","WBD","META"],
+    "Fintech":                ["PYPL","SQ","FISV","FIS","GPN","WEX","UBER","LYFT","ABNB","DASH","COIN","RBLX","ZM"],
 }
 
 def get_sector(ticker):
@@ -84,31 +136,34 @@ def get_financials(ticker):
 
 def score_dcf(metrics, price):
     try:
-        # Use free cash flow per share approach
-        fcf_per_share = safe(metrics.get('freeCashFlowPerShareTTM'))
-        if not fcf_per_share or fcf_per_share <= 0 or not price:
+        # Try FCF per share first, fall back to EPS
+        fcf = safe(metrics.get('freeCashFlowPerShareTTM'))
+        eps = safe(metrics.get('epsBasicExclExtraItemsAnnual'))
+        per_share = fcf if fcf and fcf > 0 else eps
+        if not per_share or per_share <= 0 or not price:
             return 5, 0
 
         # Conservative growth assumptions
         growth_3y   = safe(metrics.get('epsGrowth3Y'), 0.05)
-        growth_rate = min(max(growth_3y, -0.02), 0.15)  # cap between -2% and 15%
+        growth_rate = min(max(growth_3y, -0.02), 0.15)
         discount    = 0.10
         terminal_g  = 0.025
-        years       = 10
 
-        # Project and discount FCF per share
+        # Project and discount per share value
         intrinsic = 0
-        for yr in range(1, years + 1):
-            intrinsic += fcf_per_share * ((1 + growth_rate) ** yr) / ((1 + discount) ** yr)
+        for yr in range(1, 11):
+            intrinsic += per_share * ((1 + growth_rate) ** yr) / ((1 + discount) ** yr)
 
         # Terminal value
-        terminal_fcf = fcf_per_share * ((1 + growth_rate) ** years) * (1 + terminal_g)
-        intrinsic += (terminal_fcf / (discount - terminal_g)) / ((1 + discount) ** years)
+        terminal = per_share * ((1 + growth_rate) ** 10) * (1 + terminal_g)
+        intrinsic += (terminal / (discount - terminal_g)) / ((1 + discount) ** 10)
 
-        # Margin of safety: how much cheaper is the stock vs intrinsic value
-        mos = ((intrinsic - price) / price) * 100
+        # Apply a PE-like multiple to convert earnings to price
+        pe = safe(metrics.get('peBasicExclExtraTTM'), 15)
+        pe = min(max(pe, 8), 30)  # sensible range
+        intrinsic_price = intrinsic * (pe / 15)
 
-        # Cap MoS display at ±100% to avoid wild numbers
+        mos = ((intrinsic_price - price) / price) * 100
         mos = max(min(mos, 100), -100)
         score = max(0, min(10, 5 + (mos / 20)))
         return round(score, 1), round(mos, 1)
