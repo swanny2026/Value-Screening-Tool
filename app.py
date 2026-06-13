@@ -9,17 +9,68 @@ import time
 
 app = Flask(__name__, static_folder='static')
 
-API_KEY = os.environ.get('FINNHUB_API_KEY', '')
-FH_BASE = 'https://finnhub.io/api/v1'
+API_KEY      = os.environ.get('FINNHUB_API_KEY', '')
+FH_BASE      = 'https://finnhub.io/api/v1'
+SB_URL       = os.environ.get('SUPABASE_URL', '')
+SB_KEY       = os.environ.get('SUPABASE_KEY', '')
+SB_TABLE     = 'analysis_cache'
 
-# ── Cache ────────────────────────────────────────────────────────────────────
+# ── Cache (in-memory + Supabase backed) ─────────────────────────────────────
 cache = {
-    "results":   [],
-    "timestamp": None,
-    "count":     0,
+    "results":    [],
+    "timestamp":  None,
+    "count":      0,
     "refreshing": False,
 }
 CACHE_TTL_HOURS = 24
+
+def sb_headers():
+    return {
+        "apikey":        SB_KEY,
+        "Authorization": f"Bearer {SB_KEY}",
+        "Content-Type":  "application/json",
+        "Prefer":        "return=minimal"
+    }
+
+def load_cache_from_db():
+    """Load latest results from Supabase into memory on startup."""
+    try:
+        r = req.get(
+            f"{SB_URL}/rest/v1/{SB_TABLE}?order=id.desc&limit=1",
+            headers=sb_headers(), timeout=10
+        )
+        data = r.json()
+        if data and isinstance(data, list) and len(data) > 0:
+            row = data[0]
+            cache["results"]   = row["results"]
+            cache["timestamp"] = row["timestamp"]
+            cache["count"]     = row["count"]
+            print(f"Cache loaded from Supabase — {cache['count']} companies.")
+            return True
+    except Exception as e:
+        print(f"Failed to load cache from Supabase: {e}")
+    return False
+
+def save_cache_to_db(results, timestamp, count):
+    """Save results to Supabase."""
+    try:
+        # Delete old rows first to keep table clean
+        req.delete(
+            f"{SB_URL}/rest/v1/{SB_TABLE}?id=gte.0",
+            headers=sb_headers(), timeout=10
+        )
+        # Insert new results
+        r = req.post(
+            f"{SB_URL}/rest/v1/{SB_TABLE}",
+            headers=sb_headers(),
+            json={"results": results, "timestamp": timestamp, "count": count},
+            timeout=10
+        )
+        print(f"Cache saved to Supabase — {count} companies.")
+        return True
+    except Exception as e:
+        print(f"Failed to save cache to Supabase: {e}")
+        return False
 
 @app.after_request
 def after_request(response):
@@ -271,7 +322,7 @@ def compute_sector_pe_avgs(tickers):
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 def run_full_analysis():
-    """Runs the full analysis and stores results in cache."""
+    """Runs the full analysis and stores results in cache and Supabase."""
     if cache["refreshing"]:
         return
     cache["refreshing"] = True
@@ -282,9 +333,11 @@ def run_full_analysis():
         results.sort(key=lambda x: x["score"], reverse=True)
         for i, r in enumerate(results):
             r["rank"] = i + 1
+        timestamp = datetime.utcnow().isoformat()
         cache["results"]   = results
-        cache["timestamp"] = datetime.utcnow().isoformat()
+        cache["timestamp"] = timestamp
         cache["count"]     = len(results)
+        save_cache_to_db(results, timestamp, len(results))
         print(f"[{datetime.utcnow().isoformat()}] Analysis complete — {len(results)} companies scored.")
     except Exception as e:
         print(f"Analysis error: {e}")
@@ -292,11 +345,14 @@ def run_full_analysis():
         cache["refreshing"] = False
 
 def background_scheduler():
-    """Runs analysis once on startup, then every 24 hours."""
-    time.sleep(5)  # brief delay to let server start
-    while True:
+    """Load from Supabase first, then refresh every 24 hours."""
+    time.sleep(3)
+    loaded = load_cache_from_db()
+    if not loaded:
         run_full_analysis()
+    while True:
         time.sleep(CACHE_TTL_HOURS * 3600)
+        run_full_analysis()
 
 # Start background thread
 scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
