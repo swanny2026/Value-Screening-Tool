@@ -682,60 +682,79 @@
     fill.style.background = 'var(--gold)';
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('resultsSection').style.display = 'none';
-    fill.style.width = '30%';
-    label.textContent = force ? 'Triggering fresh analysis in background…' : 'Fetching latest results…';
 
-    try {
-      const res = await fetch(`${API_BASE}/run-analysis`, {
+    // If force refresh, kick it off then poll
+    if (force) {
+      await fetch(`${API_BASE}/run-analysis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force })
+        body: JSON.stringify({ force: true })
       });
-
-      // Handle 202 — still loading for first time
-      if (res.status === 202) {
-        fill.style.width = '60%';
-        label.textContent = 'Analysis running for the first time — please wait 2-3 minutes and try again.';
-        btn.classList.remove('running');
-        btn.disabled = false;
-        document.getElementById('emptyState').style.display = '';
-        return;
-      }
-
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch(parseErr) {
-        throw new Error('Bad response: ' + text.substring(0, 300));
-      }
-
-      if (!data.success) throw new Error(data.error || 'Analysis failed');
-
-      fill.style.width = '100%';
-      const cacheNote = data.cached ? ' (cached)' : '';
-      label.textContent = `${data.count} companies scored${cacheNote}`;
-      lastResults = data.results;
-
-      // Show if a background refresh was triggered
-      if (force && data.refreshing) {
-        label.textContent = 'Showing current results — fresh analysis running in background.';
-      }
-
-      setTimeout(() => {
-        prog.classList.remove('visible');
-        btn.classList.remove('running');
-        btn.disabled = false;
-        showResults(data.timestamp, data.cached);
-      }, 800);
-
-    } catch (err) {
-      fill.style.width = '100%';
-      fill.style.background = 'var(--red)';
-      label.textContent = `Error: ${err.message}`;
-      btn.classList.remove('running');
-      btn.disabled = false;
     }
+
+    // Poll /status every 3 seconds
+    const pollStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/status`);
+        const s = await res.json();
+
+        // Update progress bar
+        fill.style.width = s.progress + '%';
+
+        // Build label with ETA
+        let labelText = s.progress_label || 'Running analysis…';
+        if (s.refreshing && s.eta_seconds !== null) {
+          const mins = Math.floor(s.eta_seconds / 60);
+          const secs = s.eta_seconds % 60;
+          const etaStr = mins > 0 ? `${mins}m ${secs}s remaining` : `${secs}s remaining`;
+          labelText += ` · ${etaStr}`;
+        }
+        label.textContent = labelText;
+
+        // If analysis is running, keep polling
+        if (s.refreshing) {
+          setTimeout(pollStatus, 3000);
+          return;
+        }
+
+        // Analysis done or not running — fetch results
+        if (s.has_results) {
+          const res2 = await fetch(`${API_BASE}/run-analysis`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force: false })
+          });
+          const text = await res2.text();
+          const data = JSON.parse(text);
+          if (data.success) {
+            fill.style.width = '100%';
+            label.textContent = `${data.count} companies scored · cached`;
+            lastResults = data.results;
+            setTimeout(() => {
+              prog.classList.remove('visible');
+              btn.classList.remove('running');
+              btn.disabled = false;
+              showResults(data.timestamp, true);
+            }, 800);
+            return;
+          }
+        }
+
+        // No results yet — still first run
+        label.textContent = 'Analysis running in background — check back in a few minutes.';
+        fill.style.width = '50%';
+        btn.classList.remove('running');
+        btn.disabled = false;
+
+      } catch(err) {
+        label.textContent = `Error: ${err.message}`;
+        fill.style.background = 'var(--red)';
+        btn.classList.remove('running');
+        btn.disabled = false;
+      }
+    };
+
+    pollStatus();
   }
 
   function showResults(timestamp, cached) {
