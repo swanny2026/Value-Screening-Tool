@@ -21,6 +21,11 @@ cache = {
     "timestamp":  None,
     "count":      0,
     "refreshing": False,
+    "progress":   0,       # 0-100
+    "progress_label": "",
+    "started_at": None,
+    "total":      0,
+    "done":       0,
 }
 CACHE_TTL_HOURS = 24
 
@@ -325,21 +330,42 @@ def run_full_analysis():
     """Runs the full analysis and stores results in cache and Supabase."""
     if cache["refreshing"]:
         return
-    cache["refreshing"] = True
+    cache["refreshing"]  = True
+    cache["progress"]    = 0
+    cache["started_at"]  = datetime.utcnow().isoformat()
+    cache["total"]       = len(SP500_TICKERS)
+    cache["done"]        = 0
     print(f"[{datetime.utcnow().isoformat()}] Starting analysis...")
     try:
+        cache["progress_label"] = "Computing sector averages…"
         sector_pe_avgs = compute_sector_pe_avgs(SP500_TICKERS)
-        results = [r for r in (analyse_ticker(t, sector_pe_avgs) for t in SP500_TICKERS) if r]
+        cache["progress"] = 5
+
+        results = []
+        total = len(SP500_TICKERS)
+        for i, t in enumerate(SP500_TICKERS):
+            r = analyse_ticker(t, sector_pe_avgs)
+            if r:
+                results.append(r)
+            cache["done"]          = i + 1
+            cache["progress"]      = 5 + int((i + 1) / total * 90)
+            cache["progress_label"] = f"Scoring {t} ({i+1} of {total})…"
+
+        cache["progress_label"] = "Ranking results…"
         results.sort(key=lambda x: x["score"], reverse=True)
         for i, r in enumerate(results):
             r["rank"] = i + 1
+
         timestamp = datetime.utcnow().isoformat()
-        cache["results"]   = results
-        cache["timestamp"] = timestamp
-        cache["count"]     = len(results)
+        cache["results"]        = results
+        cache["timestamp"]      = timestamp
+        cache["count"]          = len(results)
+        cache["progress"]       = 100
+        cache["progress_label"] = f"Complete — {len(results)} companies scored."
         save_cache_to_db(results, timestamp, len(results))
         print(f"[{datetime.utcnow().isoformat()}] Analysis complete — {len(results)} companies scored.")
     except Exception as e:
+        cache["progress_label"] = f"Error: {e}"
         print(f"Analysis error: {e}")
     finally:
         cache["refreshing"] = False
@@ -359,6 +385,31 @@ scheduler_thread = threading.Thread(target=background_scheduler, daemon=True)
 scheduler_thread.start()
 
 # ── Routes ───────────────────────────────────────────────────────────────────
+
+@app.route('/status', methods=['GET'])
+def status():
+    elapsed = None
+    eta = None
+    if cache["started_at"] and cache["refreshing"]:
+        start = datetime.fromisoformat(cache["started_at"])
+        elapsed_secs = (datetime.utcnow() - start).total_seconds()
+        elapsed = int(elapsed_secs)
+        if cache["done"] > 0:
+            secs_per_ticker = elapsed_secs / cache["done"]
+            remaining = cache["total"] - cache["done"]
+            eta = int(secs_per_ticker * remaining)
+    return jsonify({
+        "refreshing":      cache["refreshing"],
+        "progress":        cache["progress"],
+        "progress_label":  cache["progress_label"],
+        "done":            cache["done"],
+        "total":           cache["total"],
+        "elapsed_seconds": elapsed,
+        "eta_seconds":     eta,
+        "has_results":     len(cache["results"]) > 0,
+        "timestamp":       cache["timestamp"],
+        "count":           cache["count"],
+    })
 
 @app.route('/health', methods=['GET'])
 def health():
