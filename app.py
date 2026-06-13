@@ -144,18 +144,18 @@ SP500_TICKERS = [
 ]
 
 SECTOR_MAP = {
-    "Technology":             ["AAPL","MSFT","GOOGL","GOOG","NVDA","AVGO","CSCO","CRM","ACN","TXN","QCOM","INTU","ORCL","IBM","ADBE","NOW","SNOW","PLTR","AMAT","LRCX","ADI","MU","KLAC","TWLO","OKTA","DDOG","CRWD","PANW","FTNT","CYBR","S","NET"],
-    "Healthcare":             ["JNJ","UNH","MRK","ABBV","TMO","ABT","AMGN","DHR","LLY","REGN","ISRG","SYK","BDX","MDT","ZTS","ELV","CI","HUM","MCK","CVS","PFE","MRNA","BIIB","VRTX","ILMN","IQV","A","WAT","PKI"],
-    "Financials":             ["JPM","V","MA","BAC","GS","MS","AXP","WFC","C","USB","PNC","TFC","COF","DFS","SYF","AIG","MET","SCHW","BK","STT","NTRS","IVZ","BEN","AMG","AMP","CME","ICE","NDAQ","CBOE","MKTX","VIRT","LPLA","RJF","SF"],
-    "Consumer Staples":       ["PG","KO","PEP","WMT","MCD","COST","SBUX","MDLZ","MO","PM","BTI"],
-    "Consumer Discretionary": ["AMZN","TSLA","HD","NKE","LOW","TJX","ROST","VFC","PVH","RL","F","GM","TM","RACE","DIS","NFLX"],
-    "Energy":                 ["XOM","CVX","EOG","COP","PSX","VLO","MPC","OXY","HAL","SLB","BKR","NOV"],
-    "Industrials":            ["RTX","HON","UPS","CAT","GE","MMM","LMT","NOC","GD","BA","DE","EMR","ETN","PH","WM","RSG","WCN"],
-    "Materials":              ["APD","ECL","SHW","PPG","DD","DOW","LIN","NEM","FCX","VMC","LYB","CE","EMN","HUN","OLN","WLK","TROX"],
-    "Real Estate":            ["PLD","AMT","CCI","EQIX","PSA","SPG","O","WELL","AVB","EQR"],
-    "Utilities":              ["NEE","SO","DUK","AEP","EXC","SRE","D","PCG","ED","FE","EIX"],
-    "Communications":         ["CMCSA","T","VZ","TMUS","CHTR","DISH","FOX","WBD","META"],
-    "Fintech":                ["PYPL","SQ","FISV","FIS","GPN","WEX","UBER","LYFT","ABNB","DASH","COIN","RBLX","ZM"],
+    "Technology":             ["AAPL","MSFT","GOOGL","GOOG","NVDA","AVGO","CSCO","CRM","ACN","TXN","QCOM","INTU","ORCL","IBM","ADBE","NOW","SNOW","PLTR","AMAT","LRCX","ADI","MU","KLAC","TWLO","OKTA","DDOG","CRWD","PANW","FTNT","NET","ZS","MDB","HUBS","SNPS","CDNS","ANSS","PTC","CTSH","EPAM","FFIV","AKAM","JNPR","NTAP","STX","WDC","HPE","HPQ","DELL","PSTG","AMD"],
+    "Healthcare":             ["JNJ","UNH","MRK","ABBV","TMO","ABT","AMGN","DHR","LLY","REGN","ISRG","SYK","BDX","MDT","ZTS","ELV","CI","HUM","MCK","CVS","PFE","MRNA","BIIB","VRTX","ILMN","IQV","A","WAT","PKI","HOLX","DXCM","IDXX","MTD","PODD","RMD","TFX","STE","HSIC","COO","ALGN","TECH"],
+    "Financials":             ["BRK-B","JPM","V","MA","BAC","GS","MS","AXP","WFC","C","USB","PNC","TFC","COF","DFS","AIG","MET","PRU","SCHW","BK","STT","NTRS","IVZ","BEN","AMG","AMP","CME","ICE","NDAQ","CBOE","MKTX","RJF","RE","ALL","CB","TRV","PGR","HIG","AFL","LNC","UNM","FNF","FAF","CINF","GL","BLK"],
+    "Consumer Staples":       ["PG","KO","PEP","WMT","MCD","COST","SBUX","MDLZ","MO","PM","CL","EL","CHD","CLX","SJM","CAG","CPB","GIS","HRL","MKC","K","HSY","MNST","STZ","TAP","KDP"],
+    "Consumer Discretionary": ["AMZN","TSLA","HD","NKE","LOW","TJX","ROST","BKNG","MAR","HLT","F","GM","APTV","LEA","BWA","LKQ","AAP","AZO","ORLY","GPC","DIS","NFLX","PARA","LYV","MHK","LVS","MGM","WYNN","RCL","CCL","NCLH","HAS","MAT"],
+    "Energy":                 ["XOM","CVX","COP","EOG","SLB","MPC","PSX","VLO","OXY","HES","HAL","BKR","NOV","DVN","PXD","APA","MRO","OVV","CTRA","LNG","KMI","WMB","OKE"],
+    "Industrials":            ["GE","HON","RTX","CAT","DE","MMM","LMT","NOC","GD","BA","UPS","FDX","EMR","ETN","PH","ROK","IR","XYL","CMI","TT","CARR","OTIS","AME","FTV","ROP","VRSK","WM","RSG","WCN","CLH","ACM","PWR","MAS","SWK","PNR","ALLE","AOS","LII","GNRC","HUBB","FELE","ATKR"],
+    "Materials":              ["LIN","APD","ECL","SHW","PPG","NEM","FCX","VMC","MLM","NUE","STLD","RS","CMC","ATI","AA","ALB","CE","DD","DOW","LYB","EMN","HUN","OLN","WLK","TROX","RPM","SON","AVY","SEE","BMS"],
+    "Real Estate":            ["PLD","AMT","CCI","EQIX","PSA","SPG","O","WELL","AVB","EQR","ESS","MAA","UDR","CPT","NNN","WPC","VICI"],
+    "Utilities":              ["NEE","SO","DUK","AEP","EXC","SRE","D","PCG","ED","FE","EIX","PEG","XEL","ES","WEC","ETR","CMS","NI","ATO","LNT"],
+    "Communications":         ["META","CMCSA","T","VZ","TMUS","CHTR","DISH","WBD","SIRI","IPG","OMC"],
+    "Fintech":                ["PYPL","FISV","FIS","GPN","UBER","LYFT","ABNB","DASH","COIN","RBLX","ZM"],
 }
 
 def get_sector(ticker):
@@ -269,12 +269,16 @@ def analyse_ticker(ticker, sector_pe_avgs):
         fin_data = get_financials(ticker)
         quote    = get_quote(ticker)
 
-        if not profile or not profile.get('name'):
+        # Use ticker as name if profile missing — don't drop the company
+        name = (profile or {}).get('name') or ticker
+        metrics = fin_data.get('metric', {}) if fin_data else {}
+        price   = safe(quote.get('c')) if quote else 0
+
+        # Skip if no price at all — can't do anything useful
+        if not price:
             return None
 
-        metrics = fin_data.get('metric', {})
-        price   = safe(quote.get('c'))
-        sector  = get_sector(ticker)
+        sector = get_sector(ticker)
 
         dcf_score, mos  = score_dcf(metrics, price)
         quality_score   = score_quality(metrics)
@@ -290,7 +294,7 @@ def analyse_ticker(ticker, sector_pe_avgs):
 
         return {
             "ticker":   ticker,
-            "name":     profile.get('name', ticker),
+            "name":     name,
             "sector":   sector,
             "index":    "S&P 500",
             "price":    round(price, 2),
